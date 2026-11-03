@@ -33,4 +33,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:${PORT}/api/health || exit 1
 
-CMD ["./api"]
+# Aplica migrations pendentes antes de subir (idempotente, uma transação por migration).
+# Não depende do preDeployCommand: serviços Railway novos ignoram railway.json.
+CMD ["sh", "-c", "./migrate up && exec ./api"]

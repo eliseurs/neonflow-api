@@ -47,7 +47,7 @@ make migrate-status                # lista status
 make migrate-create name=foo       # cria V{N+1}_foo.up/down.sql
 make create-admin ADMIN_EMAIL=... ADMIN_PASSWORD=... ADMIN_NAME=... [ADMIN_ROLE=central]
 
-# Railway (projeto nexus-os)
+# Railway (projeto neonflow)
 railway run --service neonflow-api ./migrate status
 railway logs --service neonflow-api
 ```
@@ -60,8 +60,8 @@ railway logs --service neonflow-api
 
 - **Backend**: Go 1.25, Gin, PostgreSQL 16, pgx v5, JWT (golang-jwt v5), bcrypt
 - **Frontend**: React + TypeScript + Vite + Tailwind + Zustand (repo separado em `../neonflow-app`)
-- **Infra**: Railway (serviço `neonflow-api` + plugin PostgreSQL). Local via `docker-compose.yml`
-- **Migrations**: runner Go puro — `sql/migrations/V{N}_*.up/down.sql`. No Railway rodam no `preDeployCommand`
+- **Infra**: Railway, projeto `neonflow` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-production.up.railway.app. Local via `docker-compose.yml`
+- **Migrations**: runner Go puro — `sql/migrations/V{N}_*.up/down.sql`. Rodam ao iniciar o container (`CMD` do Dockerfile)
 
 ### Estado atual
 

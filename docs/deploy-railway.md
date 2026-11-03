@@ -1,8 +1,10 @@
 # Deploy da API no Railway
 
-Projeto Railway: **nexus-os** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente `production`. A API **ainda não foi publicada**.
+Projeto Railway: **neonflow** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente `production`.
 
-## Criar (uma vez)
+Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neonflow-api-production.up.railway.app. Cada push na `main` publica. Banco: plugin `Postgres` no mesmo projeto.
+
+## Como foi criado (03/11/2026)
 
 1. Railway → projeto **nexus-os** → **New → Database → PostgreSQL**.
 2. **New → GitHub repo → `eliseurs/neonflow-api`**. Nome do serviço: `neonflow-api`.
@@ -14,10 +16,12 @@ Projeto Railway: **nexus-os** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente
 | `DATABASE_URL` | referência: `${{Postgres.DATABASE_URL}}` |
 | `JWT_SECRET` | `openssl rand -base64 48` — nunca commitar |
 | `JWT_EXPIRY_HOURS` | `12` |
-| `ALLOWED_ORIGINS` | domínio do frontend (ex.: `https://neonflow-web-production.up.railway.app`) |
+| `ALLOWED_ORIGINS` | `https://neonflow-app-production.up.railway.app` |
 
 4. **Settings → Networking → Generate Domain**.
-5. Deploy. O `railway.json` faz: build pelo `Dockerfile`, `./migrate up` no pre-deploy, healthcheck em `/api/health`.
+5. Deploy. O build usa o `Dockerfile`, e o container roda `./migrate up && ./api` ao iniciar.
+
+> **Serviços Railway criados depois da descontinuação do config-as-code ignoram o `railway.json`** (`fileServiceManifest` vazio). Por isso as migrations rodam no `CMD` da imagem, e não no `preDeployCommand`. O healthcheck (`/api/health`) precisa ser configurado no painel (Settings → Deploy → Healthcheck Path) ou via `.railway/railway.ts`.
 6. Primeiro usuário:
 
 ```bash

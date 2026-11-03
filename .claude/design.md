@@ -16,7 +16,7 @@ Produto, perfis, jornada e roadmap: `docs/produto/`. Pendências: `docs/pendenci
 | Banco | PostgreSQL 16 |
 | Auth | JWT HS256 (golang-jwt v5, issuer `neonflow-api`), bcrypt |
 | Testes | testing + testify; integração com build tag `integration` |
-| Deploy | Railway — Dockerfile, `preDeployCommand: ./migrate up`, healthcheck `/api/health` |
+| Deploy | Railway — Dockerfile; o container roda `./migrate up && ./api` (serviços novos ignoram `railway.json`) |
 
 Decisão: ADR-0009. Mesma stack do cognia-api.
 
@@ -105,7 +105,7 @@ Contratos propostos: `docs/integracoes.md`. C4: `.claude/business-rules/README.m
 
 | Serviço | Repo | Build | Healthcheck |
 |---|---|---|---|
-| `neonflow-api` (a criar) | `eliseurs/neonflow-api` | Dockerfile | `/api/health` |
-| PostgreSQL (a criar) | plugin | — | — |
+| `neonflow-api` | `eliseurs/neonflow-api` | Dockerfile | `/api/health` — https://neonflow-api-production.up.railway.app |
+| `Postgres` | plugin | — | interno (`${{Postgres.DATABASE_URL}}`) |
 
 Variáveis: `APP_ENV=production`, `DATABASE_URL` (referência ao plugin), `JWT_SECRET`, `ALLOWED_ORIGINS` (URL do frontend). Runbook: `docs/deploy-railway.md`.
