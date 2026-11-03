@@ -1,0 +1,27 @@
+package security
+
+import (
+	"fmt"
+
+	"golang.org/x/crypto/bcrypt"
+)
+
+type BcryptHasher struct {
+	cost int
+}
+
+func NewBcryptHasher() *BcryptHasher {
+	return &BcryptHasher{cost: bcrypt.DefaultCost}
+}
+
+func (h *BcryptHasher) Hash(password string) (string, error) {
+	b, err := bcrypt.GenerateFromPassword([]byte(password), h.cost)
+	if err != nil {
+		return "", fmt.Errorf("hash password: %w", err)
+	}
+	return string(b), nil
+}
+
+func (h *BcryptHasher) Compare(hash, password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}

@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: neonflow_db
+    environment:
+      POSTGRES_USER: neonflow
+      POSTGRES_PASSWORD: neonflow
+      POSTGRES_DB: neonflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./devops/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neonflow -d neonflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: neonflow_api
+    command: ["sh", "-c", "./migrate up && ./api"]
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: local
+      PORT: 8080
+      DATABASE_URL: postgres://neonflow:neonflow@db:5432/neonflow?sslmode=disable
+      ALLOWED_ORIGINS: http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
