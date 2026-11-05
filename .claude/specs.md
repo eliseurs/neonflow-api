@@ -8,6 +8,13 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-05] — Landing no neonflow-app
+
+- Landing pública em `/` no `neonflow-app`, só com regras aprovadas (ADR-0011, ADR-0013, RN-02, RN-06), sem preço, foto ou hotel parceiro.
+- `docs/pendencias.md`: PEN-66 (número de WhatsApp da central), 66 pendências.
+
+---
+
 ## [2026-11-05] — Frota e reservas na API
 
 Decisões do time nesta rodada: diária no veículo (RN-01.2), frota e reservas juntas, com suposições onde as pendências seguem abertas.
