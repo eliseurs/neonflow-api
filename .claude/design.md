@@ -108,4 +108,4 @@ Contratos propostos: `docs/integracoes.md`. C4: `.claude/business-rules/README.m
 | `neonflow-api` | `eliseurs/neonflow-api` | Dockerfile | `/api/health` — https://neonflow-api-production.up.railway.app |
 | `Postgres` | plugin | — | interno (`${{Postgres.DATABASE_URL}}`) |
 
-Variáveis: `APP_ENV=production`, `DATABASE_URL` (referência ao plugin), `JWT_SECRET`, `ALLOWED_ORIGINS` (URL do frontend). Runbook: `docs/deploy-railway.md`.
+Ambiente Railway `hml`. Variáveis: `APP_ENV=hml`, `DATABASE_URL` (referência ao plugin), `JWT_SECRET`, `ALLOWED_ORIGINS` (URL do frontend). Runbook: `docs/deploy-railway.md`.

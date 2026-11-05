@@ -1,6 +1,6 @@
 # ADR-0006 — Momento do bloqueio de disponibilidade
 
-- **Status:** aceita
+- **Status:** substituída por [ADR-0012](ADR-0012-pre-reserva-expira-em-24h.md) em 04/11/2026
 - **Decisores:** time (03/11/2026)
 - **Relacionados:** PEN-04, PEN-24
 

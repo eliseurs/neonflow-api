@@ -39,7 +39,7 @@ type Routes struct {
 }
 
 func New(configs config.Configs, database *sql.DB, logger *slog.Logger) *App {
-	if configs.IsProduction() {
+	if configs.IsDeployed() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	app := &App{

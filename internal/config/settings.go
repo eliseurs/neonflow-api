@@ -9,15 +9,16 @@ import (
 
 const (
 	EnvLocal      = "local"
+	EnvHml        = "hml"
 	EnvProduction = "production"
 
-	// devJWTSecret só existe para desenvolvimento local. Em produção a API não sobe com ele.
+	// devJWTSecret só existe para desenvolvimento local. Fora dele a API não sobe com ele.
 	devJWTSecret = "neonflow-dev-secret-nao-usar-em-producao"
 )
 
 var (
-	ErrMissingJWTSecret   = errors.New("JWT_SECRET é obrigatório em produção")
-	ErrMissingDatabaseURL = errors.New("DATABASE_URL é obrigatório em produção")
+	ErrMissingJWTSecret   = errors.New("JWT_SECRET é obrigatório fora do ambiente local")
+	ErrMissingDatabaseURL = errors.New("DATABASE_URL é obrigatório fora do ambiente local")
 )
 
 type Configs struct {
@@ -42,13 +43,15 @@ func Load() Configs {
 	}
 }
 
-func (c Configs) IsProduction() bool {
-	return c.AppEnv == EnvProduction
+// IsDeployed vale para todo ambiente publicado (hml, production ou qualquer
+// outro nome): só "local" usa os defaults de desenvolvimento.
+func (c Configs) IsDeployed() bool {
+	return c.AppEnv != EnvLocal
 }
 
-// Validate impede que a API suba em produção com defaults de desenvolvimento.
+// Validate impede que a API suba fora do ambiente local com defaults de desenvolvimento.
 func (c Configs) Validate() error {
-	if !c.IsProduction() {
+	if !c.IsDeployed() {
 		return nil
 	}
 	if c.JWTSecret == "" || c.JWTSecret == devJWTSecret {

@@ -12,7 +12,7 @@
 | **protótipo** | Existe só em `../neonflow-app/prototipo/dist/` — não aprovada como regra de produto |
 | **proposta** | Sugerida em documento, sem aprovação |
 
-**Nenhuma regra comercial (tarifa, caução, multa, comissão) está aprovada.** Ver `docs/pendencias.md` (PEN-01 a PEN-12). Não invente valores: sem fonte, abra uma pendência.
+**Nenhum valor (tarifa, caução, franquia, comissão, hora de espera) está aprovado.** O fundador decidiu que esses valores são **configuráveis pela operação** (RN-01.5), então não ficam no código. As regras de formato estão aprovadas, como 24h para pagar, 1 diária mínima e cancelamento do transfer. Ver `docs/pendencias.md` (PEN-01 a PEN-12). Não invente valores: sem fonte, abra uma pendência.
 
 ## Índice
 
@@ -23,6 +23,7 @@
 | `03-financeiro-e-comissoes.md` | Caução, recebimento e comissão por origem |
 | `04-dados-e-integracoes.md` | Dados entre verticais e integrações com o Nexus |
 | `05-autorizacao.md` | Autenticação e papéis |
+| `06-condutor-caucao-e-seguro.md` | Requisitos do condutor, caução e seguro no aluguel sem motorista |
 
 ---
 

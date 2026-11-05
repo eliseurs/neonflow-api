@@ -25,23 +25,37 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("JWT_EXPIRY_HOURS", "abc")
 	t.Setenv("ALLOWED_ORIGINS", " https://a.app , ,https://b.app ")
 	c := Load()
-	assert.True(t, c.IsProduction())
+	assert.True(t, c.IsDeployed())
 	assert.Equal(t, "9000", c.Port)
 	assert.Equal(t, 12, c.JWTExpiryHours, "valor inválido cai no default")
 	assert.Equal(t, []string{"https://a.app", "https://b.app"}, c.AllowedOrigins)
 }
 
-func TestValidate_Production(t *testing.T) {
-	t.Setenv("APP_ENV", "production")
+func TestIsDeployed(t *testing.T) {
+	assert.False(t, Configs{AppEnv: EnvLocal}.IsDeployed())
+	for _, env := range []string{EnvHml, EnvProduction, "staging"} {
+		assert.True(t, Configs{AppEnv: env}.IsDeployed(), env)
+	}
+}
 
-	t.Setenv("JWT_SECRET", "")
-	t.Setenv("DATABASE_URL", "postgres://x")
-	assert.ErrorIs(t, Load().Validate(), ErrMissingJWTSecret)
+func TestValidate_Deployed(t *testing.T) {
+	for _, env := range []string{EnvHml, EnvProduction, "staging"} {
+		t.Run(env, func(t *testing.T) {
+			t.Setenv("APP_ENV", env)
 
-	t.Setenv("JWT_SECRET", "um-segredo-de-producao")
-	t.Setenv("DATABASE_URL", "")
-	assert.ErrorIs(t, Load().Validate(), ErrMissingDatabaseURL)
+			t.Setenv("JWT_SECRET", "")
+			t.Setenv("DATABASE_URL", "postgres://x")
+			assert.ErrorIs(t, Load().Validate(), ErrMissingJWTSecret)
 
-	t.Setenv("DATABASE_URL", "postgres://x")
-	assert.NoError(t, Load().Validate())
+			t.Setenv("JWT_SECRET", devJWTSecret)
+			assert.ErrorIs(t, Load().Validate(), ErrMissingJWTSecret, "segredo de desenvolvimento é recusado")
+
+			t.Setenv("JWT_SECRET", "um-segredo-de-verdade")
+			t.Setenv("DATABASE_URL", "")
+			assert.ErrorIs(t, Load().Validate(), ErrMissingDatabaseURL)
+
+			t.Setenv("DATABASE_URL", "postgres://x")
+			assert.NoError(t, Load().Validate())
+		})
+	}
 }

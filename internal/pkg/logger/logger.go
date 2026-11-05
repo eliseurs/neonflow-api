@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// New devolve JSON em produção (Railway) e texto legível no ambiente local.
+// New devolve JSON nos ambientes publicados (Railway) e texto legível no ambiente local.
 func New(production bool) *slog.Logger {
 	return newWithWriter(production, os.Stdout)
 }

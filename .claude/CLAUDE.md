@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.claude/style.md` | When writing any code (Go, SQL) |
 | `.claude/specs.md` | To understand recent changes and in-progress plans |
 | `.claude/business-rules/` | Before touching frota, reservas, financeiro, integrações or auth |
-| `docs/pendencias.md` | Before implementing any business rule — 52 items, 15 blocking |
+| `docs/pendencias.md` | Before implementing any business rule — 65 items, 15 blocking |
 | `docs/adr/` | Architecture decisions (MADR) |
 
 Frontend: repositório irmão `../neonflow-app` (React). Protótipo congelado: `../neonflow-app/prototipo`.
@@ -60,7 +60,7 @@ railway logs --service neonflow-api
 
 - **Backend**: Go 1.25, Gin, PostgreSQL 16, pgx v5, JWT (golang-jwt v5), bcrypt
 - **Frontend**: React + TypeScript + Vite + Tailwind + Zustand (repo separado em `../neonflow-app`)
-- **Infra**: Railway, projeto `neonflow` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-production.up.railway.app. Local via `docker-compose.yml`
+- **Infra**: Railway, projeto `neonflow`, ambiente `hml` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-production.up.railway.app (o domínio manteve o nome antigo). Local via `docker-compose.yml`
 - **Migrations**: runner Go puro — `sql/migrations/V{N}_*.up/down.sql`. Rodam ao iniciar o container (`CMD` do Dockerfile)
 
 ### Estado atual
@@ -72,7 +72,8 @@ Scaffold: `GET /health`, `GET /api/health`, `POST /api/auth/login`, `GET /api/au
 | `APP_ENV` | Arquivo | Comportamento |
 |---|---|---|
 | `local` | nenhum | defaults de `internal/config/settings.go`, banco do docker compose |
-| `production` | nenhum (env vars injetadas) | Railway — sem `JWT_SECRET` e `DATABASE_URL` a API não sobe |
+| `hml` | nenhum (env vars injetadas) | Railway, ambiente `hml` (o único hoje) — sem `JWT_SECRET` e `DATABASE_URL` a API não sobe |
+| `production` ou outro | nenhum (env vars injetadas) | mesmas exigências: todo valor diferente de `local` é ambiente publicado (`IsDeployed`) |
 
 Defaults locais ficam em `internal/config/settings.go` — não criar `.env.local`.
 

@@ -20,7 +20,7 @@ import (
 //	ADMIN_EMAIL=... ADMIN_PASSWORD=... ADMIN_NAME=... [ADMIN_ROLE=admin|central] ./create-admin
 func main() {
 	cfg := config.Load()
-	log := logger.New(cfg.IsProduction())
+	log := logger.New(cfg.IsDeployed())
 	ctx := context.Background()
 
 	database, err := db.Open(ctx, cfg.DatabaseURL)
