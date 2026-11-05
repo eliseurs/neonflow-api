@@ -1,6 +1,6 @@
 # Registro de pendências
 
-**65 pendências, 15 bloqueantes** (21 resolvidas, 10 parciais, 34 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
+**65 pendências, 15 bloqueantes** (28 resolvidas, 10 parciais, 27 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
@@ -62,15 +62,15 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 
 | ID | Pendência | Severidade | Onde | Status | Fonte |
 | --- | --- | --- | --- | --- | --- |
-| PEN-21 | Sem persistência: arrays em memória, recarga apaga tudo | Bloqueante | `dist/app.js` | aberta | Dossiê H; CT-08 |
-| PEN-22 | Sem backend: validação só no navegador | Bloqueante | `dist/app.js` | aberta | Dossiê I |
-| PEN-23 | Sem autenticação nem controle de acesso por perfil | Bloqueante | — | aberta | Dossiê I |
-| PEN-24 | Sem bloqueio atômico: duas sessões reservam o mesmo período | Bloqueante | `createBooking` (app.js:41) | aberta | Dossiê F |
-| PEN-25 | Data inexistente (30/02) aceita | Alta | `createBooking` (app.js:41) | aberta | CT-09 |
-| PEN-26 | `advance` vai além da etapa 4 | Alta | `advance` (app.js:45) | aberta | CT-12 |
-| PEN-27 | Total recalculado com a tarifa atual, sem snapshot | Alta | `total` (app.js:19) | aberta | CT-11 |
+| PEN-21 | Sem persistência: arrays em memória, recarga apaga tudo | Bloqueante | `dist/app.js` | resolvida na API em 05/11/2026: frota e reservas no PostgreSQL (V2, V3); o protótipo continua em memória | Dossiê H; CT-08 |
+| PEN-22 | Sem backend: validação só no navegador | Bloqueante | `dist/app.js` | resolvida na API em 05/11/2026: validação em `fleet` e `booking` | Dossiê I |
+| PEN-23 | Sem autenticação nem controle de acesso por perfil | Bloqueante | — | resolvida na API em 05/11/2026: JWT e papéis admin/central em todas as rotas de frota e reserva; perfis do produto seguem em PEN-14 | Dossiê I |
+| PEN-24 | Sem bloqueio atômico: duas sessões reservam o mesmo período | Bloqueante | `createBooking` (app.js:41) | resolvida na API em 05/11/2026: `EXCLUDE USING gist` em `bookings`, testado com 8 criações simultâneas | Dossiê F |
+| PEN-25 | Data inexistente (30/02) aceita | Alta | `createBooking` (app.js:41) | resolvida na API em 05/11/2026 (RN-02.7) | CT-09 |
+| PEN-26 | `advance` vai além da etapa 4 | Alta | `advance` (app.js:45) | resolvida na API em 05/11/2026 (RN-02.4) | CT-12 |
+| PEN-27 | Total recalculado com a tarifa atual, sem snapshot | Alta | `total` (app.js:19) | resolvida na API em 05/11/2026 (RN-02.6) | CT-11 |
 | PEN-28 | Veículo "Livre" com reserva futura confirmada | Alta | `vehicleState` (app.js:20) | aberta | CT-10 |
-| PEN-29 | Sem horário, intervalo de limpeza ou fuso; 09:00 fixo | Alta | `createBooking` | aberta | Dossiê F |
+| PEN-29 | Sem horário, intervalo de limpeza ou fuso; 09:00 fixo | Alta | `createBooking` | aberta: a API (05/11/2026) usa só datas, `[retirada, devolução)`, sem horário nem limpeza | Dossiê F |
 | PEN-30 | Financeiro remove cancelada paga; sem caução, custos, conciliação, repasses | Alta | `finance` (app.js:29) | aberta | Dossiê F |
 | PEN-31 | Testes legados fora do CI | Média | `prototipo/tests/legacy/` | parcial: trazidos para o repo em 03/11/2026; falta CI | 02_CENARIOS |
 | PEN-32 | Sem lint, formatação nem CI | Média | raiz | parcial: Makefile, ESLint (app) e `go vet` (api) em 03/11/2026; falta CI | Manifesto |

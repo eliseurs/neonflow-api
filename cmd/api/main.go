@@ -6,6 +6,8 @@ import (
 
 	"neonflow-api/internal/config"
 	authRoute "neonflow-api/internal/domain/authentication/route"
+	bookingRoute "neonflow-api/internal/domain/booking/route"
+	fleetRoute "neonflow-api/internal/domain/fleet/route"
 	"neonflow-api/internal/infra/api"
 	"neonflow-api/internal/infra/db"
 	"neonflow-api/internal/pkg/logger"
@@ -32,6 +34,8 @@ func main() {
 	app.HealthCheck()
 
 	authRoute.Register(app)
+	fleetRoute.Register(app)
+	bookingRoute.Register(app)
 
 	app.Server()
 }

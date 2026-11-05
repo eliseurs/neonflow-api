@@ -1,0 +1,76 @@
+package fleet
+
+import (
+	"regexp"
+	"strings"
+	"time"
+)
+
+// Categorias aprovadas em 03/11/2026 (RN-01.4).
+const (
+	CategoryEconomy = "economy"
+	CategoryPremium = "premium"
+
+	GearManual     = "manual"
+	GearAutomatico = "automatico"
+)
+
+// Placa antiga (ABC1234) ou Mercosul (ABC1D23), já sem hífen e em maiúsculas.
+var platePattern = regexp.MustCompile(`^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$`)
+
+type Vehicle struct {
+	ID             string    `json:"id"`
+	Plate          string    `json:"plate"`
+	Name           string    `json:"name"`
+	Category       string    `json:"category"`
+	Owner          string    `json:"owner"`
+	Seats          int       `json:"seats"`
+	Gear           string    `json:"gear"`
+	DailyRateCents int64     `json:"daily_rate_cents"`
+	InMaintenance  bool      `json:"in_maintenance"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// VehicleRequest é o corpo de criação e de atualização (PUT substitui todos os campos).
+type VehicleRequest struct {
+	Plate          string `json:"plate"`
+	Name           string `json:"name"`
+	Category       string `json:"category"`
+	Owner          string `json:"owner"`
+	Seats          int    `json:"seats"`
+	Gear           string `json:"gear"`
+	DailyRateCents int64  `json:"daily_rate_cents"`
+	InMaintenance  bool   `json:"in_maintenance"`
+}
+
+func NormalizePlate(plate string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), "-", ""))
+}
+
+// Validate normaliza e valida o veículo. A diária é dado da central, nunca default (RN-01.5).
+func (r VehicleRequest) Validate() (VehicleRequest, error) {
+	r.Plate = NormalizePlate(r.Plate)
+	r.Name = strings.TrimSpace(r.Name)
+	r.Category = strings.ToLower(strings.TrimSpace(r.Category))
+	r.Owner = strings.TrimSpace(r.Owner)
+	r.Gear = strings.ToLower(strings.TrimSpace(r.Gear))
+
+	switch {
+	case !platePattern.MatchString(r.Plate):
+		return r, ErrInvalidPlate
+	case r.Name == "":
+		return r, ErrNameRequired
+	case r.Category != CategoryEconomy && r.Category != CategoryPremium:
+		return r, ErrInvalidCategory
+	case r.Owner == "":
+		return r, ErrOwnerRequired
+	case r.Seats <= 0:
+		return r, ErrInvalidSeats
+	case r.Gear != GearManual && r.Gear != GearAutomatico:
+		return r, ErrInvalidGear
+	case r.DailyRateCents <= 0:
+		return r, ErrInvalidDailyRate
+	}
+	return r, nil
+}

@@ -1,5 +1,7 @@
 # plano de reserva persistente — Ciclo de reserva persistente (aluguel assistido)
 
+> **Estado em 05/11/2026:** núcleo implementado na API (`fleet`, `booking`): cadastro da frota, disponibilidade por período, pré-reserva com bloqueio atômico, conferências, etapas, cancelamento, expiração em 24h e histórico. Os cinco cenários abaixo têm teste. Ficaram de fora, por dependerem de pendências: horário e fuso (PEN-29), dados e documentos do cliente (PEN-48), tenant (PEN-49), multa e estorno do cancelamento (RN-02.21, PEN-05) e a tela no `neonflow-app`.
+
 ## Objetivo
 
 Primeiro incremento real, sugerido no Dossiê L: um ciclo assistido de reserva com persistência, identidade e disponibilidade atômica, reutilizando a infraestrutura existente do Nexus, com regras explícitas e histórico. Corresponde à fase 1 do [roadmap](produto/roadmap.md).
