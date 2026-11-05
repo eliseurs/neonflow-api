@@ -10,6 +10,13 @@ Já decidido: o período fica bloqueado desde a criação (RN-02.1) e a pré-res
 
 ---
 
+## [2026-11-05] — Logo escolhido
+
+- Caminho B (serra e estrada num círculo) escolhido entre três propostas no canvas "Logo Neon Flow" (Claude Design). Versões: principal, horizontal, fundo claro (dourado #7A5C26), ícone de app e favicon simplificado (16 px sem a estrada).
+- `docs/pendencias.md`: PEN-64 resolvida (21 resolvidas, 10 parciais, 34 abertas). Falta exportar os arquivos para o `neonflow-app`.
+
+---
+
 ## [2026-11-05] — Respostas do fundador, rodada 3
 
 - 16 de 16 respondidas (q50–q65). Os 4 conflitos da rodada 2 foram resolvidos: 21 anos (RN-06.1), o Neon Flow recebe e repassa ao dono (RN-03.7), comissão depois do pagamento e do serviço finalizado (RN-03.8), Pix ou link confirmado pela central no lançamento (RN-02.14, ADR-0013).

@@ -1,6 +1,6 @@
 # Registro de pendências
 
-**65 pendências, 15 bloqueantes** (20 resolvidas, 11 parciais, 34 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
+**65 pendências, 15 bloqueantes** (21 resolvidas, 10 parciais, 34 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
@@ -56,7 +56,7 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 | PEN-60 | Definir como o cliente fecha a reserva: WhatsApp, formulário para a central ou pagamento online | Alta | Fundador + produto | resolvida em 03/11/2026 ([ADR-0011](adr/ADR-0011-escopo-de-lancamento-e-canais.md)): WhatsApp, formulário e pagamento online | Linha visual LuxuryBus, 03/11/2026 |
 | PEN-62 | Decidir entre fotos da frota real ou ilustrativas | Média | Fundador | resolvida em 03/11/2026 ([ADR-0011](adr/ADR-0011-escopo-de-lancamento-e-canais.md)): mistas | Linha visual LuxuryBus, 03/11/2026 |
 | PEN-63 | Definir idiomas e moedas do site | Média | Fundador | resolvida em 05/11/2026 ([ADR-0013](adr/ADR-0013-pagamento-online-e-moedas.md)): português e inglês; cobrança em reais, dólar só exibido como conversão | Linha visual LuxuryBus, 03/11/2026 |
-| PEN-64 | Confirmar se existe logo do Neon Flow para fundo preto e dourado | Média | Fundador | parcial: decidido criar; a equipe do projeto (Claude) propõe opções e o fundador escolhe (04/11/2026); estilo: símbolo ligado à Serra Gaúcha, como araucária ou montanha (05/11/2026); faltam as opções | Linha visual LuxuryBus, 03/11/2026 |
+| PEN-64 | Confirmar se existe logo do Neon Flow para fundo preto e dourado | Média | Fundador | resolvida em 05/11/2026: caminho B, serra e estrada num círculo, com "NEON FLOW" em Fraunces e dourado sobre preto (canvas "Logo Neon Flow", Claude Design). Falta exportar SVG e PNG para os repositórios | Linha visual LuxuryBus, 03/11/2026 |
 
 ## Técnicas do código atual
 
