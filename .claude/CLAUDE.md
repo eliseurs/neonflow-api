@@ -60,7 +60,7 @@ railway logs --service neonflow-api
 
 - **Backend**: Go 1.25, Gin, PostgreSQL 16, pgx v5, JWT (golang-jwt v5), bcrypt
 - **Frontend**: React + TypeScript + Vite + Tailwind + Zustand (repo separado em `../neonflow-app`)
-- **Infra**: Railway, projeto `neonflow` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-production.up.railway.app. Local via `docker-compose.yml`
+- **Infra**: Railway, projeto `neonflow`, ambiente `hml` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-production.up.railway.app (o domínio manteve o nome antigo). Local via `docker-compose.yml`
 - **Migrations**: runner Go puro — `sql/migrations/V{N}_*.up/down.sql`. Rodam ao iniciar o container (`CMD` do Dockerfile)
 
 ### Estado atual
@@ -72,7 +72,8 @@ Scaffold: `GET /health`, `GET /api/health`, `POST /api/auth/login`, `GET /api/au
 | `APP_ENV` | Arquivo | Comportamento |
 |---|---|---|
 | `local` | nenhum | defaults de `internal/config/settings.go`, banco do docker compose |
-| `production` | nenhum (env vars injetadas) | Railway — sem `JWT_SECRET` e `DATABASE_URL` a API não sobe |
+| `hml` | nenhum (env vars injetadas) | Railway, ambiente `hml` (o único hoje) — sem `JWT_SECRET` e `DATABASE_URL` a API não sobe |
+| `production` ou outro | nenhum (env vars injetadas) | mesmas exigências: todo valor diferente de `local` é ambiente publicado (`IsDeployed`) |
 
 Defaults locais ficam em `internal/config/settings.go` — não criar `.env.local`.
 

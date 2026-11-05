@@ -1,6 +1,6 @@
 # Deploy da API no Railway
 
-Projeto Railway: **neonflow** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente `production`.
+Projeto Railway: **neonflow** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente `hml` (renomeado de `production` em 05/11/2026; os domínios `*-production.up.railway.app` mantiveram o nome).
 
 Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neonflow-api-production.up.railway.app. Cada push na `main` publica. Banco: plugin `Postgres` no mesmo projeto.
 
@@ -12,7 +12,7 @@ Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neon
 
 | Variável | Valor |
 |---|---|
-| `APP_ENV` | `production` |
+| `APP_ENV` | `hml` (qualquer valor diferente de `local` exige `JWT_SECRET` e `DATABASE_URL`) |
 | `DATABASE_URL` | referência: `${{Postgres.DATABASE_URL}}` |
 | `JWT_SECRET` | `openssl rand -base64 48` — nunca commitar |
 | `JWT_EXPIRY_HOURS` | `12` |

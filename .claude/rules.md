@@ -75,7 +75,7 @@
 ## Regras de Segurança e LGPD
 
 - Nunca logar senhas, tokens, query string, corpo de request ou dados pessoais (nome, e-mail, CNH, telefone)
-- `JWT_SECRET` só via env var; em `production` a API não sobe sem ele
+- `JWT_SECRET` só via env var; fora do ambiente `local` (hml, production) a API não sobe sem ele
 - Login responde a mesma mensagem para e-mail inexistente e senha errada (RN-05.5)
 - Nunca commitar `.env` — só `.env.example`
 - Dados de exemplo e de teste são **sempre fictícios** (`@neonflow.test`)

@@ -10,6 +10,17 @@ Já decidido: o período fica bloqueado desde a criação (RN-02.1) e a pré-res
 
 ---
 
+## [2026-11-05] — Ambiente hml no Railway
+
+O ambiente do Railway foi renomeado de `production` para `hml`, e o serviço passou a usar `APP_ENV=hml`. Como a API só exigia `JWT_SECRET` e `DATABASE_URL` com `APP_ENV=production`, em `hml` ela subiria com os defaults locais, inclusive o segredo JWT de desenvolvimento.
+
+- `internal/config/settings.go`: `IsProduction()` virou `IsDeployed()`, verdadeiro para todo `APP_ENV` diferente de `local`. Constante `EnvHml`. Mensagens de erro dizem "fora do ambiente local".
+- `cmd/api`, `cmd/create-admin` e `internal/infra/api/http.go` usam `IsDeployed()` (logs em JSON e Gin em modo release em hml).
+- Testes: `TestIsDeployed` e `TestValidate_Deployed` (hml, production e um nome qualquer; o segredo de desenvolvimento é recusado).
+- Docs: `.claude/CLAUDE.md`, `rules.md`, `design.md` e `docs/deploy-railway.md`. Os domínios `*-production.up.railway.app` não mudaram.
+
+---
+
 ## [2026-11-05] — Logo escolhido
 
 - Caminho B (serra e estrada num círculo) escolhido entre três propostas no canvas "Logo Neon Flow" (Claude Design). Versões: principal, horizontal, fundo claro (dourado #7A5C26), ícone de app e favicon simplificado (16 px sem a estrada).

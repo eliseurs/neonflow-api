@@ -13,7 +13,7 @@ import (
 
 func main() {
 	cfg := config.Load()
-	log := logger.New(cfg.IsProduction())
+	log := logger.New(cfg.IsDeployed())
 
 	if err := cfg.Validate(); err != nil {
 		log.Error("invalid configuration", "error", err)

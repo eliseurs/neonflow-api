@@ -92,7 +92,7 @@ func TestAccessorsAndProductionMode(t *testing.T) {
 	assert.NotNil(t, app.Logger())
 	assert.Equal(t, config.EnvLocal, app.Configs().AppEnv)
 
-	prod := New(config.Configs{AppEnv: config.EnvProduction, JWTSecret: "s", JWTExpiryHours: 1}, nil, app.Logger())
+	prod := New(config.Configs{AppEnv: config.EnvHml, JWTSecret: "s", JWTExpiryHours: 1}, nil, app.Logger())
 	assert.Equal(t, gin.ReleaseMode, gin.Mode())
 	assert.NotNil(t, prod.Router())
 	gin.SetMode(gin.TestMode)
