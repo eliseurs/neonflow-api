@@ -3,3 +3,6 @@ bin/
 .env
 .env.*
 !.env.example
+
+# Referências visuais locais (capturas de terceiros, não versionar)
+docs/referencias-visuais/
