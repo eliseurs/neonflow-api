@@ -1,8 +1,8 @@
 # Deploy da API no Railway
 
-Projeto Railway: **neonflow** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente `hml` (renomeado de `production` em 05/11/2026; os domínios `*-production.up.railway.app` mantiveram o nome).
+Projeto Railway: **neonflow** (`58da0777-4fc0-4891-98bd-554ca078557e`), ambiente `hml` (renomeado de `production` em 05/11/2026; os domínios passaram para `*-hml.up.railway.app`, menos o do protótipo).
 
-Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neonflow-api-production.up.railway.app. Cada push na `main` publica. Banco: plugin `Postgres` no mesmo projeto.
+Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neonflow-api-hml.up.railway.app. Cada push na `main` publica. Banco: plugin `Postgres` no mesmo projeto.
 
 ## Como foi criado (03/11/2026)
 
@@ -16,7 +16,7 @@ Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neon
 | `DATABASE_URL` | referência: `${{Postgres.DATABASE_URL}}` |
 | `JWT_SECRET` | `openssl rand -base64 48` — nunca commitar |
 | `JWT_EXPIRY_HOURS` | `12` |
-| `ALLOWED_ORIGINS` | `https://neonflow-app-production.up.railway.app` |
+| `ALLOWED_ORIGINS` | `https://neonflow-app-hml.up.railway.app` |
 
 4. **Settings → Networking → Generate Domain**.
 5. Deploy. O build usa o `Dockerfile`, e o container roda `./migrate up && ./api` ao iniciar.

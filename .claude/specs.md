@@ -4,9 +4,32 @@
 
 ## Em andamento — Ciclo de reserva persistente
 
-Plano: `docs/plano-reserva-persistente.md`. **Bloqueado** até resolver PEN-01 a PEN-06 (regras de locação), PEN-35/PEN-36 (donos no Nexus/Replit) e PEN-48/PEN-49 (LGPD e isolamento). PEN-52 resolvida: landing e reserva autorizadas (ADR-0011).
+Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11/2026 (entrada abaixo). Falta: horário e fuso (PEN-29), dados e documentos do cliente (PEN-48), isolamento por tenant (PEN-49), multa e estorno do cancelamento (RN-02.21, PEN-05), estado do veículo com reservas futuras (RN-01.3, PEN-28), limite de km e itens do checklist configuráveis (RN-02.18, RN-01.6) e as telas no `neonflow-app`.
 
-Já decidido: o período fica bloqueado desde a criação (RN-02.1) e a pré-reserva não paga em 24h é cancelada sozinha (RN-02.11, ADR-0012, que substitui o ADR-0006). Pagamento integral na reserva, por Pix ou link confirmado pela central no lançamento (ADR-0013). Valores comerciais configuráveis, nunca no código (RN-01.5). O veículo só volta a ficar disponível com o checklist de devolução aprovado (RN-01.6). A stack está definida (ADR-0009).
+---
+
+## [2026-11-05] — Landing no neonflow-app
+
+- Landing pública em `/` no `neonflow-app`, só com regras aprovadas (ADR-0011, ADR-0013, RN-02, RN-06), sem preço, foto ou hotel parceiro.
+- `docs/pendencias.md`: PEN-66 (número de WhatsApp da central), 66 pendências.
+
+---
+
+## [2026-11-05] — Frota e reservas na API
+
+Decisões do time nesta rodada: diária no veículo (RN-01.2), frota e reservas juntas, com suposições onde as pendências seguem abertas.
+
+- **Migrations**: `V2_vehicles` (placa única, categoria economy/premium, câmbio, diária > 0, manutenção) e `V3_bookings` (`btree_gist`, `EXCLUDE` por veículo e `daterange` nas etapas ativas, cópia da diária e do total, `checks` JSONB, `expires_at`, `created_by`) + `booking_events` (histórico de etapas).
+- **Domínio `fleet`**: `GET/POST /api/vehicles`, `GET/PUT /api/vehicles/:id`, para admin e central. Placa normalizada (sem hífen, maiúsculas, formato antigo ou Mercosul).
+- **Domínio `booking`**: `GET /api/availability`, `GET/POST /api/bookings`, `GET /api/bookings/:id`, `GET /api/bookings/:id/events`, `PATCH /api/bookings/:id/checks`, `POST /api/bookings/:id/advance`, `POST /api/bookings/:id/cancel`.
+  - Bloqueio atômico no banco: sobreposição vira 409 "período indisponível" (RN-02.1, RN-02.2, PEN-24).
+  - Etapas preparacao → confirmada → em_locacao → devolvida → encerrada, cada uma com suas conferências (`cnh`, `terms`, `deposit`, `payment` / `delivery` / `return` / `issues`). Avanço e cancelamento só gravam se a etapa ainda for a lida (dois cliques não avançam duas vezes).
+  - Pré-reserva sem `payment` vence em 24h (RN-02.11): a expiração roda no início de cada operação de reserva, na mesma transação da criação, e grava evento com `user_id` nulo.
+- **Suposições** (registradas nas RNs e em `pendencias.md`): só datas, sem horário (PEN-29); do cliente só o nome, CNH como conferência (PEN-48); operação única (PEN-49); cancelamento sem multa nem estorno (RN-02.21).
+- **Testes**: unitários de entidade, service, handler e rota; integração dos dois repositories, incluindo 8 criações simultâneas no mesmo período (só uma passa), expiração e cópia da diária. Cobertura de `internal/`: 94,9% com integração, 64,6% só unitários. Smoke de ponta a ponta com a API rodando.
+- **Regras**: RN-01.1, 01.2, 01.4, 02.1, 02.2, 02.3 (como conferência), 02.4, 02.5, 02.6, 02.7, 02.11 e 02.12 marcadas `implementada`.
+- **Pendências**: PEN-21 a PEN-27 resolvidas na API (28 resolvidas, 10 parciais, 27 abertas).
+- **Railway**: `APP_ENV` do serviço passou de `production` para `hml`. Domínios agora são `neonflow-api-hml` e `neonflow-app-hml`; docs atualizados (`.claude/CLAUDE.md`, `design.md`, `docs/deploy-railway.md` e o do `neonflow-app`).
 
 ---
 

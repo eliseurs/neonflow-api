@@ -60,12 +60,12 @@ railway logs --service neonflow-api
 
 - **Backend**: Go 1.25, Gin, PostgreSQL 16, pgx v5, JWT (golang-jwt v5), bcrypt
 - **Frontend**: React + TypeScript + Vite + Tailwind + Zustand (repo separado em `../neonflow-app`)
-- **Infra**: Railway, projeto `neonflow`, ambiente `hml` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-production.up.railway.app (o domínio manteve o nome antigo). Local via `docker-compose.yml`
+- **Infra**: Railway, projeto `neonflow`, ambiente `hml` (serviço `neonflow-api` + plugin `Postgres`), https://neonflow-api-hml.up.railway.app. Local via `docker-compose.yml`
 - **Migrations**: runner Go puro — `sql/migrations/V{N}_*.up/down.sql`. Rodam ao iniciar o container (`CMD` do Dockerfile)
 
 ### Estado atual
 
-Scaffold: `GET /health`, `GET /api/health`, `POST /api/auth/login`, `GET /api/auth/me`. **Frota e reservas ainda não existem** — plano em `docs/plano-reserva-persistente.md`, bloqueado pelas pendências PEN-01 a PEN-06.
+Auth (`/api/auth/*`), frota (`/api/vehicles`) e reservas (`/api/bookings`, `/api/availability`), operados pela central. Reserva com bloqueio atômico no banco, etapas com conferências e histórico. Plano em `docs/plano-reserva-persistente.md`; suposições abertas: horário e fuso (PEN-29), dados do cliente (PEN-48) e tenant (PEN-49).
 
 ### Ambientes
 

@@ -32,6 +32,8 @@ cmd/
 internal/
   domain/
     authentication/         # login, me, criação de usuário (CLI)
+    fleet/                  # veículos (RN-01)
+    booking/                # reservas, disponibilidade e histórico (RN-02)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -47,7 +49,7 @@ devops/initdb/              # cria neonflow_test no docker compose
 docs/                       # ADRs, pendências, produto, deploy
 ```
 
-Domínios planejados (`docs/plano-reserva-persistente.md`): `fleet` (veículos) e `booking` (reservas).
+Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 
 ---
 
@@ -58,6 +60,20 @@ Domínios planejados (`docs/plano-reserva-persistente.md`): `fleet` (veículos) 
 | GET | `/health`, `/api/health` | — | 200 com banco ok, 503 sem banco |
 | POST | `/api/auth/login` | — | `{email, password}` → `{token, expires_at, user}` |
 | GET | `/api/auth/me` | JWT | Usuário do token |
+| GET | `/api/vehicles` | admin, central | Lista a frota |
+| GET | `/api/vehicles/:id` | admin, central | Um veículo |
+| POST | `/api/vehicles` | admin, central | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance`) |
+| PUT | `/api/vehicles/:id` | admin, central | Substitui todos os campos (inclusive manutenção) |
+| GET | `/api/availability?start_date=&end_date=` | admin, central | Veículos fora de manutenção e sem reserva ativa no período |
+| GET | `/api/bookings?vehicle_id=` | admin, central | Lista reservas |
+| GET | `/api/bookings/:id` | admin, central | Uma reserva |
+| GET | `/api/bookings/:id/events` | admin, central | Histórico de etapas |
+| POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_date`, `end_date`, `place`): bloqueia o período |
+| PATCH | `/api/bookings/:id/checks` | admin, central | Marca conferências da etapa atual (`{"cnh": true}`) |
+| POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas |
+| POST | `/api/bookings/:id/cancel` | admin, central | Cancela (preparação ou confirmada) e libera o período |
+
+Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada).
 
 ---
 
@@ -74,15 +90,28 @@ users
 schema_migrations (version TEXT PK, applied_at)
 ```
 
-Planejado — ver `.claude/business-rules/01-frota.md` e `02-reservas.md`:
+Frota e reservas (V2, V3) — regras em `.claude/business-rules/01-frota.md` e `02-reservas.md`:
 
 ```
-vehicles  (id, plate, name, category, owner, seats, gear, daily_rate_cents, in_maintenance, ...)
-bookings  (id, vehicle_id FK, client_name, start_date, end_date, place, stage,
-           daily_rate_cents, total_cents, paid, checks JSONB, ...)
+vehicles
+  id, plate (UNIQUE, sem hífen), name, owner TEXT
+  category CHECK (economy|premium), gear CHECK (manual|automatico), seats INT
+  daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
+
+bookings
+  id, vehicle_id FK, client_name, start_date DATE, end_date DATE, place
+  stage CHECK (preparacao|confirmada|em_locacao|devolvida|encerrada|cancelada)
+  days, daily_rate_cents, total_cents   -- cópia da diária na criação (RN-02.6)
+  checks JSONB                          -- conferências: cnh, terms, deposit, payment, delivery, return, issues
+  expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)
+  created_by FK users, created_at, updated_at
   EXCLUDE USING gist (vehicle_id WITH =, daterange(start_date, end_date) WITH &&)
-    WHERE (stage NOT IN ('encerrada','cancelada'))   -- requer btree_gist (RN-02.1/02.2)
+    WHERE (stage NOT IN ('encerrada','cancelada'))   -- btree_gist (RN-02.1/02.2)
+
+booking_events (booking_id FK, from_stage, to_stage, user_id NULL = automático, created_at)
 ```
+
+A expiração roda dentro de cada operação de reserva (mesma conexão ou transação), antes de ler ou gravar. Não há job em segundo plano: uma pré-reserva vencida fica `preparacao` no banco até a próxima chamada, mas nunca é vista assim pela API.
 
 `daterange(start, end)` é semiaberto `[start, end)`: datas adjacentes não se sobrepõem, como no protótipo.
 
@@ -105,7 +134,7 @@ Contratos propostos: `docs/integracoes.md`. C4: `.claude/business-rules/README.m
 
 | Serviço | Repo | Build | Healthcheck |
 |---|---|---|---|
-| `neonflow-api` | `eliseurs/neonflow-api` | Dockerfile | `/api/health` — https://neonflow-api-production.up.railway.app |
+| `neonflow-api` | `eliseurs/neonflow-api` | Dockerfile | `/api/health` — https://neonflow-api-hml.up.railway.app |
 | `Postgres` | plugin | — | interno (`${{Postgres.DATABASE_URL}}`) |
 
 Ambiente Railway `hml`. Variáveis: `APP_ENV=hml`, `DATABASE_URL` (referência ao plugin), `JWT_SECRET`, `ALLOWED_ORIGINS` (URL do frontend). Runbook: `docs/deploy-railway.md`.
