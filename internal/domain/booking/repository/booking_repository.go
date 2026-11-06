@@ -20,7 +20,8 @@ const (
 	invalidTextRepresentation = "22P02"
 
 	bookingColumns = `id, vehicle_id, client_name, start_at, end_at, place, stage, days,
-		daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_days, extra_cents,
+				daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_days, extra_cents,
+		deposit_cents, km_limit_per_day, extra_km_cents, delivered_km, returned_km, excess_km, excess_km_cents,
 		expires_at, created_by, created_at, updated_at`
 
 	// queryExpire cancela pré-reservas não pagas no prazo e registra a transição (RN-02.11).
@@ -55,16 +56,18 @@ const (
 		ORDER BY created_at, id
 	`
 	queryLockVehicle = `
-		SELECT daily_rate_cents, in_maintenance
+				SELECT daily_rate_cents, in_maintenance, deposit_cents, km_limit_per_day, extra_km_cents
 		FROM vehicles
 		WHERE id = $1
 		FOR SHARE
 	`
 	// A diária do veículo é copiada para a reserva: mudar a tarifa depois não altera o total (RN-02.6).
 	queryCreate = `
-		INSERT INTO bookings (vehicle_id, client_name, start_at, end_at, place, days,
-		                      daily_rate_cents, total_cents, expires_at, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(secs => $9), NULLIF($10, '')::uuid)
+				INSERT INTO bookings (vehicle_id, client_name, start_at, end_at, place, days,
+		                      daily_rate_cents, total_cents, expires_at, created_by,
+		                      deposit_cents, km_limit_per_day, extra_km_cents)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(secs => $9), NULLIF($10, '')::uuid,
+		        $11, $12, $13)
 		RETURNING ` + bookingColumns
 	querySetChecks = `
 		UPDATE bookings
@@ -78,7 +81,11 @@ const (
 		    delivered_at = coalesce($4, delivered_at),
 		    returned_at = coalesce($5, returned_at),
 		    extra_days = coalesce($6, extra_days),
-		    extra_cents = coalesce($7, extra_cents),
+		    		    extra_cents = coalesce($7, extra_cents),
+		    delivered_km = coalesce($8, delivered_km),
+		    returned_km = coalesce($9, returned_km),
+		    excess_km = coalesce($10, excess_km),
+		    excess_km_cents = coalesce($11, excess_km_cents),
 		    updated_at = now()
 		WHERE id = $1 AND stage = $2
 		RETURNING ` + bookingColumns
@@ -101,8 +108,9 @@ const (
 		VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, '')::uuid)
 	`
 	queryAvailable = `
-		SELECT v.id, v.plate, v.name, v.category, v.owner, v.seats, v.gear,
-		       v.daily_rate_cents, v.in_maintenance, v.created_at, v.updated_at
+				SELECT v.id, v.plate, v.name, v.category, v.owner, v.seats, v.gear,
+		       v.daily_rate_cents, v.in_maintenance, v.deposit_cents, v.km_limit_per_day, v.extra_km_cents,
+		       v.created_at, v.updated_at
 		FROM vehicles v
 		WHERE NOT v.in_maintenance
 		  AND NOT EXISTS (
@@ -200,18 +208,27 @@ func (r *BookingRepository) Create(ctx context.Context, n booking.NewBooking) (b
 
 		var rate int64
 		var inMaintenance bool
-		err := tx.QueryRowContext(ctx, queryLockVehicle, n.VehicleID).Scan(&rate, &inMaintenance)
+		var deposit, extraKm sql.NullInt64
+		var kmLimit sql.NullInt32
+		err := tx.QueryRowContext(ctx, queryLockVehicle, n.VehicleID).Scan(&rate, &inMaintenance, &deposit, &kmLimit, &extraKm)
 		if err := mapError(err, booking.ErrVehicleNotFound, "lock vehicle"); err != nil {
 			return err
 		}
 		if inMaintenance {
 			return booking.ErrVehicleInMaintenance // RN-01.1
 		}
+		// RN-02.18: o plano vem da escolha da central; sem escolha, limitado se o veículo tiver limite.
+		if n.KmPlan == booking.KmPlanLimitado && !kmLimit.Valid {
+			return booking.ErrKmPlanUnavailable
+		}
+		if n.KmPlan == booking.KmPlanLivre {
+			kmLimit, extraKm = sql.NullInt32{}, sql.NullInt64{}
+		}
 
 		days := n.Period.Days()
 		created, err = scanBooking(tx.QueryRowContext(ctx, queryCreate,
 			n.VehicleID, n.ClientName, n.Period.Start, n.Period.End, n.Place, days,
-			rate, int64(days)*rate, booking.PaymentWindow.Seconds(), n.CreatedBy))
+			rate, int64(days)*rate, booking.PaymentWindow.Seconds(), n.CreatedBy, deposit, kmLimit, extraKm))
 		if err != nil {
 			return mapError(err, booking.ErrBookingNotFound, "create booking")
 		}
@@ -256,7 +273,8 @@ func (r *BookingRepository) Transition(ctx context.Context, id, from, to, userID
 		}
 		var err error
 		updated, err = scanBooking(tx.QueryRowContext(ctx, queryTransition, id, from, to,
-			rec.DeliveredAt, rec.ReturnedAt, rec.ExtraDays, rec.ExtraCents))
+			rec.DeliveredAt, rec.ReturnedAt, rec.ExtraDays, rec.ExtraCents,
+			rec.DeliveredKm, rec.ReturnedKm, rec.ExcessKm, rec.ExcessKmCents))
 		if err != nil {
 			return mapError(err, booking.ErrStageChanged, "transition booking")
 		}
@@ -278,10 +296,13 @@ func (r *BookingRepository) Available(ctx context.Context, p booking.Period) ([]
 	vehicles := []fleet.Vehicle{}
 	for rows.Next() {
 		var v fleet.Vehicle
+		var deposit, extraKm sql.NullInt64
+		var kmLimit sql.NullInt32
 		if err := rows.Scan(&v.ID, &v.Plate, &v.Name, &v.Category, &v.Owner, &v.Seats, &v.Gear,
-			&v.DailyRateCents, &v.InMaintenance, &v.CreatedAt, &v.UpdatedAt); err != nil {
+			&v.DailyRateCents, &v.InMaintenance, &deposit, &kmLimit, &extraKm, &v.CreatedAt, &v.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan vehicle: %w", err)
 		}
+		v.DepositCents, v.ExtraKmCents, v.KmLimitPerDay = nullInt64(deposit), nullInt64(extraKm), nullInt(kmLimit)
 		vehicles = append(vehicles, v)
 	}
 	if err := rows.Err(); err != nil {
@@ -346,8 +367,11 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	var checks []byte
 	var createdBy sql.NullString
 	var delivered, returned sql.NullTime
+	var deposit, extraKm sql.NullInt64
+	var kmLimit, deliveredKm, returnedKm sql.NullInt32
 	err := s.Scan(&b.ID, &b.VehicleID, &b.ClientName, &start, &end, &b.Place, &b.Stage, &b.Days,
 		&b.DailyRateCents, &b.TotalCents, &checks, &delivered, &returned, &b.ExtraDays, &b.ExtraCents,
+		&deposit, &kmLimit, &extraKm, &deliveredKm, &returnedKm, &b.ExcessKm, &b.ExcessKmCents,
 		&b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return b, err
@@ -359,11 +383,31 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	b.CreatedBy = nullable(createdBy)
 	b.DeliveredAt = localTime(delivered)
 	b.ReturnedAt = localTime(returned)
+	b.DepositCents = nullInt64(deposit)
+	b.ExtraKmCents = nullInt64(extraKm)
+	b.KmLimitPerDay = nullInt(kmLimit)
+	b.DeliveredKm = nullInt(deliveredKm)
+	b.ReturnedKm = nullInt(returnedKm)
 	b.Checks = map[string]bool{}
 	if err := json.Unmarshal(checks, &b.Checks); err != nil {
 		return b, fmt.Errorf("decode checks: %w", err)
 	}
 	return b, nil
+}
+
+func nullInt64(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	return &n.Int64
+}
+
+func nullInt(n sql.NullInt32) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int32)
+	return &v
 }
 
 func localTime(t sql.NullTime) *time.Time {

@@ -27,6 +27,10 @@ const (
 	DayLength = 24 * time.Hour
 	// LateTolerance é a tolerância na devolução: até 1 hora depois do combinado não cobra (RN-02.19).
 	LateTolerance = time.Hour
+	// Plano de quilometragem escolhido na reserva (RN-02.18). Vazio: limitado se o veículo tiver limite.
+	KmPlanLivre    = "livre"
+	KmPlanLimitado = "limitado"
+
 	// ClockSkew é a folga aceita para uma hora informada no futuro (relógios desencontrados).
 	ClockSkew = 5 * time.Minute
 
@@ -68,12 +72,21 @@ type Booking struct {
 	DeliveredAt *time.Time `json:"delivered_at"`
 	ReturnedAt  *time.Time `json:"returned_at"`
 	// Diárias extras do atraso na devolução e o valor delas, pela diária da reserva (RN-02.19).
-	ExtraDays  int       `json:"extra_days"`
-	ExtraCents int64     `json:"extra_cents"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	CreatedBy  *string   `json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ExtraDays  int   `json:"extra_days"`
+	ExtraCents int64 `json:"extra_cents"`
+	// Caução e plano de km copiados do veículo na criação (RN-06.4, RN-02.18). KmLimitPerDay nulo = km livre.
+	DepositCents  *int64 `json:"deposit_cents"`
+	KmLimitPerDay *int   `json:"km_limit_per_day"`
+	ExtraKmCents  *int64 `json:"extra_km_cents"`
+	// Odômetro na entrega e na devolução e o excedente cobrado (RN-02.18).
+	DeliveredKm   *int      `json:"delivered_km"`
+	ReturnedKm    *int      `json:"returned_km"`
+	ExcessKm      int       `json:"excess_km"`
+	ExcessKmCents int64     `json:"excess_km_cents"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	CreatedBy     *string   `json:"created_by"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // Event é uma transição de etapa. UserID nulo indica transição automática (expiração).
@@ -94,20 +107,33 @@ type CreateRequest struct {
 	StartDate  string `json:"start_date"`
 	EndDate    string `json:"end_date"`
 	Place      string `json:"place"`
+	KmPlan     string `json:"km_plan"`
 }
 
 // AdvanceRequest é o corpo opcional do avanço de etapa. At é a hora real da entrega
 // (confirmada → em locação) ou da devolução (em locação → devolvida); vazia, vale agora.
 type AdvanceRequest struct {
 	At string `json:"at"`
+	// Km é o odômetro na entrega ou na devolução; obrigatório quando o plano é limitado (RN-02.18).
+	Km *int `json:"km"`
 }
 
 // Record é o que a transição grava além da etapa. Campos nulos não mudam a reserva.
 type Record struct {
-	DeliveredAt *time.Time
-	ReturnedAt  *time.Time
-	ExtraDays   *int
-	ExtraCents  *int64
+	DeliveredAt   *time.Time
+	ReturnedAt    *time.Time
+	ExtraDays     *int
+	ExtraCents    *int64
+	DeliveredKm   *int
+	ReturnedKm    *int
+	ExcessKm      *int
+	ExcessKmCents *int64
+}
+
+// ExcessKm é o que passou da franquia: limite por dia × diárias cobradas (as da reserva mais as do
+// atraso, RN-02.19). Abaixo da franquia, zero (RN-02.18).
+func ExcessKm(limitPerDay, chargedDays, driven int) int {
+	return max(driven-limitPerDay*chargedDays, 0)
 }
 
 // LateDays conta as diárias extras de uma devolução: nada até 1 hora depois do combinado;
@@ -132,6 +158,7 @@ type NewBooking struct {
 	Period     Period
 	Place      string
 	CreatedBy  string
+	KmPlan     string
 }
 
 // Period é o intervalo [Start, End) entre a retirada e a devolução combinadas.
@@ -202,6 +229,10 @@ func (r CreateRequest) Validate(userID string) (NewBooking, error) {
 		ClientName: strings.TrimSpace(r.ClientName),
 		Place:      strings.TrimSpace(r.Place),
 		CreatedBy:  userID,
+		KmPlan:     strings.ToLower(strings.TrimSpace(r.KmPlan)),
+	}
+	if n.KmPlan != "" && n.KmPlan != KmPlanLivre && n.KmPlan != KmPlanLimitado {
+		return n, ErrInvalidKmPlan
 	}
 	switch {
 	case n.VehicleID == "":

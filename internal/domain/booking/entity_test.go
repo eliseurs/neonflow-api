@@ -83,7 +83,21 @@ func TestLateDays(t *testing.T) {
 	}
 }
 
+func TestExcessKm(t *testing.T) {
+	// RN-02.18: franquia = limite por dia × diárias cobradas.
+	assert.Equal(t, 0, ExcessKm(200, 3, 600))
+	assert.Equal(t, 0, ExcessKm(200, 3, 120))
+	assert.Equal(t, 50, ExcessKm(200, 3, 650))
+	assert.Equal(t, 0, ExcessKm(200, 4, 650), "diária de atraso também traz franquia")
+}
+
 func TestCreateRequestValidate(t *testing.T) {
+	plan, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12", KmPlan: " Livre "}.Validate("u1")
+	require.NoError(t, err)
+	assert.Equal(t, KmPlanLivre, plan.KmPlan)
+	_, err = CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12", KmPlan: "ilimitado"}.Validate("u1")
+	assert.ErrorIs(t, err, ErrInvalidKmPlan)
+
 	withTime, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartAt: "2026-12-10T14:00", EndAt: "2026-12-12T15:00",
 		StartDate: "2026-01-01", EndDate: "2026-01-02"}.Validate("u1")
 	require.NoError(t, err)

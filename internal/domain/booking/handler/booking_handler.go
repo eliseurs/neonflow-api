@@ -136,12 +136,15 @@ func statusFor(err error) int {
 	case errors.Is(err, booking.ErrVehicleRequired), errors.Is(err, booking.ErrClientNameRequired),
 		errors.Is(err, booking.ErrInvalidDate), errors.Is(err, booking.ErrInvalidPeriod),
 		errors.Is(err, booking.ErrInvalidCheck), errors.Is(err, booking.ErrFutureTime),
-		errors.Is(err, booking.ErrReturnBeforeDelivery):
+		errors.Is(err, booking.ErrReturnBeforeDelivery), errors.Is(err, booking.ErrInvalidKmPlan),
+		errors.Is(err, booking.ErrKmRequired), errors.Is(err, booking.ErrInvalidKm),
+		errors.Is(err, booking.ErrKmBeforeDelivery):
 		return http.StatusBadRequest
 	case errors.Is(err, booking.ErrVehicleInMaintenance), errors.Is(err, booking.ErrPeriodUnavailable),
 		errors.Is(err, booking.ErrChecksPending), errors.Is(err, booking.ErrStageFinal),
 		errors.Is(err, booking.ErrNotCancelable), errors.Is(err, booking.ErrStageChanged),
-		errors.Is(err, booking.ErrAwaitingChecklist), errors.Is(err, booking.ErrVehicleInUse):
+		errors.Is(err, booking.ErrAwaitingChecklist), errors.Is(err, booking.ErrVehicleInUse),
+		errors.Is(err, booking.ErrKmPlanUnavailable):
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError

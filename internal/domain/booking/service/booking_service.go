@@ -68,7 +68,7 @@ func (s *BookingService) Advance(ctx context.Context, id, userID string, req boo
 	if err != nil {
 		return booking.Booking{}, err
 	}
-	rec, err := s.record(b, next, req.At)
+	rec, err := s.record(b, next, req)
 	if err != nil {
 		return booking.Booking{}, err
 	}
@@ -76,9 +76,17 @@ func (s *BookingService) Advance(ctx context.Context, id, userID string, req boo
 }
 
 // record monta o que a transição grava: a hora real na entrega e na devolução e, na devolução, o atraso.
-func (s *BookingService) record(b booking.Booking, next, at string) (booking.Record, error) {
+func (s *BookingService) record(b booking.Booking, next string, req booking.AdvanceRequest) (booking.Record, error) {
+	at := req.At
 	if next != booking.StageEmLocacao && next != booking.StageDevolvida {
 		return booking.Record{}, nil
+	}
+	if req.Km != nil && *req.Km < 0 {
+		return booking.Record{}, booking.ErrInvalidKm
+	}
+	limited := b.KmLimitPerDay != nil
+	if limited && req.Km == nil {
+		return booking.Record{}, booking.ErrKmRequired
 	}
 	now := s.now()
 	when := now
@@ -93,14 +101,24 @@ func (s *BookingService) record(b booking.Booking, next, at string) (booking.Rec
 		when = t
 	}
 	if next == booking.StageEmLocacao {
-		return booking.Record{DeliveredAt: &when}, nil
+		return booking.Record{DeliveredAt: &when, DeliveredKm: req.Km}, nil
 	}
 	if b.DeliveredAt != nil && !when.After(*b.DeliveredAt) {
 		return booking.Record{}, booking.ErrReturnBeforeDelivery
 	}
+	if req.Km != nil && b.DeliveredKm != nil && *req.Km < *b.DeliveredKm {
+		return booking.Record{}, booking.ErrKmBeforeDelivery
+	}
 	days := booking.LateDays(b.EndAt, when)
 	cents := int64(days) * b.DailyRateCents
-	return booking.Record{ReturnedAt: &when, ExtraDays: &days, ExtraCents: &cents}, nil
+	rec := booking.Record{ReturnedAt: &when, ExtraDays: &days, ExtraCents: &cents, ReturnedKm: req.Km}
+	// Sem o odômetro da entrega (entregue antes desta versão), não há como medir o excedente.
+	if limited && b.DeliveredKm != nil {
+		excess := booking.ExcessKm(*b.KmLimitPerDay, b.Days+days, *req.Km-*b.DeliveredKm)
+		excessCents := int64(excess) * *b.ExtraKmCents
+		rec.ExcessKm, rec.ExcessKmCents = &excess, &excessCents
+	}
+	return rec, nil
 }
 
 // extraChecks: na etapa "devolvida", o checklist de devolução configurado pela central entra
