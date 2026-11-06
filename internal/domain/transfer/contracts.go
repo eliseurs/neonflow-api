@@ -1,17 +1,16 @@
 package transfer
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
 type Repository interface {
 	List(ctx context.Context) ([]Transfer, error)
 	FindByID(ctx context.Context, id string) (Transfer, error)
 	Events(ctx context.Context, id string) ([]Event, error)
 	Create(ctx context.Context, n NewTransfer) (Transfer, error)
-	Offer(ctx context.Context, id, userID string, offerCents int64, expiresAt time.Time) (Transfer, error)
-	Accept(ctx context.Context, id, userID, driverID string) (Transfer, error)
+	Drivers(ctx context.Context, id string) ([]Driver, error)
+	Offer(ctx context.Context, id, userID string, offerCents int64) (Transfer, error)
+	Notify(ctx context.Context, id, userID, driverID string) (Transfer, error)
+	Accept(ctx context.Context, id, userID string, req AcceptRequest) (Transfer, error)
 	Release(ctx context.Context, id, userID string) (Transfer, error)
 	SetPaid(ctx context.Context, id, userID string, paid bool) (Transfer, error)
 	Start(ctx context.Context, id, userID string) (Transfer, error)
@@ -24,7 +23,9 @@ type Service interface {
 	Get(ctx context.Context, id string) (Transfer, error)
 	Events(ctx context.Context, id string) ([]Event, error)
 	Create(ctx context.Context, req CreateRequest, userID string) (Transfer, error)
+	Drivers(ctx context.Context, id string) ([]Driver, error)
 	Offer(ctx context.Context, id, userID string, req OfferRequest) (Transfer, error)
+	Notify(ctx context.Context, id, userID string, req NotifyRequest) (Transfer, error)
 	Accept(ctx context.Context, id, userID string, req AcceptRequest) (Transfer, error)
 	Release(ctx context.Context, id, userID string) (Transfer, error)
 	SetPaid(ctx context.Context, id, userID string, paid bool) (Transfer, error)

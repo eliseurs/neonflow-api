@@ -47,7 +47,23 @@ func (h *TransferHandler) Create(c *gin.Context) {
 	h.respond(c, http.StatusCreated, t, err, "create transfer failed")
 }
 
-// Offer godoc: POST /api/transfers/:id/offer {offer_cents, minutes}
+// Drivers godoc: GET /api/transfers/:id/drivers
+func (h *TransferHandler) Drivers(c *gin.Context) {
+	list, err := h.svc.Drivers(c.Request.Context(), c.Param("id"))
+	h.respond(c, http.StatusOK, list, err, "transfer drivers failed")
+}
+
+// Notify godoc: POST /api/transfers/:id/notify {driver_partner_id}
+func (h *TransferHandler) Notify(c *gin.Context) {
+	var req transfer.NotifyRequest
+	if !bind(c, &req) {
+		return
+	}
+	t, err := h.svc.Notify(c.Request.Context(), c.Param("id"), c.GetString("userID"), req)
+	h.respond(c, http.StatusOK, t, err, "notify transfer failed")
+}
+
+// Offer godoc: POST /api/transfers/:id/offer {offer_cents}
 func (h *TransferHandler) Offer(c *gin.Context) {
 	var req transfer.OfferRequest
 	if !bind(c, &req) {
@@ -57,7 +73,7 @@ func (h *TransferHandler) Offer(c *gin.Context) {
 	h.respond(c, http.StatusOK, t, err, "offer transfer failed")
 }
 
-// Accept godoc: POST /api/transfers/:id/accept {driver_partner_id}
+// Accept godoc: POST /api/transfers/:id/accept {driver_partner_id, offer_cents?, vehicle_id?}
 func (h *TransferHandler) Accept(c *gin.Context) {
 	var req transfer.AcceptRequest
 	if !bind(c, &req) {
@@ -133,7 +149,7 @@ func (h *TransferHandler) respond(c *gin.Context, status int, data any, err erro
 		errors.Is(err, transfer.ErrRouteRequired), errors.Is(err, transfer.ErrInvalidPassengers),
 		errors.Is(err, transfer.ErrInvalidPrice), errors.Is(err, transfer.ErrReferrerNotFound),
 		errors.Is(err, transfer.ErrInvalidOffer), errors.Is(err, transfer.ErrOfferDecreased),
-		errors.Is(err, transfer.ErrInvalidDeadline), errors.Is(err, transfer.ErrDriverNotFound),
+		errors.Is(err, transfer.ErrVehicleNotFound), errors.Is(err, transfer.ErrDriverNotFound),
 		errors.Is(err, transfer.ErrInvalidExtraWait):
 		api.RespondError(c, http.StatusBadRequest, err.Error())
 	case errors.Is(err, transfer.ErrWrongStage), errors.Is(err, transfer.ErrNoOffer), errors.Is(err, transfer.ErrNotPaid):

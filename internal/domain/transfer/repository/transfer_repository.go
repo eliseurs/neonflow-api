@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -19,11 +20,12 @@ const (
 
 	transferSelect = `
 		SELECT t.id, t.client_name, t.pickup_at, t.origin, t.destination, t.flight, t.passengers, t.notes,
-		       t.price_cents, t.stage, t.offer_cents, t.offer_expires_at, t.driver_partner_id, d.name,
-		       t.driver_cents, t.paid_at, t.extra_wait_cents, t.cancel_fee_cents, t.flight_cancelled,
+		       t.price_cents, t.stage, t.offer_cents, t.driver_partner_id, d.name,
+		       t.driver_cents, t.vehicle_id, v.name, t.paid_at, t.extra_wait_cents, t.cancel_fee_cents, t.flight_cancelled,
 		       t.referred_by_partner_id, t.created_by, t.created_at, t.updated_at
 		FROM transfers t
-		LEFT JOIN partners d ON d.id = t.driver_partner_id`
+		LEFT JOIN partners d ON d.id = t.driver_partner_id
+		LEFT JOIN vehicles v ON v.id = t.vehicle_id`
 
 	queryList   = transferSelect + ` ORDER BY t.pickup_at DESC`
 	queryFind   = transferSelect + ` WHERE t.id = $1`
@@ -38,7 +40,21 @@ const (
 		SELECT e.action, e.detail, u.name, e.created_at
 		FROM transfer_events e LEFT JOIN users u ON u.id = e.user_id
 		WHERE e.transfer_id = $1 ORDER BY e.created_at, e.id`
-	queryDriverOK = `SELECT EXISTS (SELECT 1 FROM partners WHERE id = $1 AND is_driver AND active)`
+	// Pode dirigir: parceiro ativo motorista ou proprietário (RN-03.10 revista).
+	queryDriverName = `SELECT name FROM partners WHERE id = $1 AND active AND (is_driver OR is_owner)`
+	queryVehicleOK  = `SELECT EXISTS (SELECT 1 FROM vehicles WHERE id = $1)`
+	queryDrivers    = `
+		SELECT p.id, p.name, p.whatsapp, p.is_driver, p.is_owner,
+		       coalesce((SELECT json_agg(o.pickup_at ORDER BY o.pickup_at) FROM transfers o
+		                 WHERE o.driver_partner_id = p.id AND o.id <> $1
+		                   AND o.stage IN ('com_motorista', 'em_andamento')
+		                   AND (o.pickup_at AT TIME ZONE 'America/Sao_Paulo')::date = ($2::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date),
+		                '[]'),
+		       coalesce((SELECT json_agg(json_build_object('id', v.id, 'name', v.name, 'plate', v.plate) ORDER BY v.name)
+		                 FROM vehicles v WHERE v.owner_partner_id = p.id), '[]')
+		FROM partners p
+		WHERE p.active AND (p.is_driver OR p.is_owner)
+		ORDER BY p.is_driver DESC, p.name`
 
 	// Na conclusão: o motorista recebe oferta + espera (RN-03.9, RN-02.16) e o indicador, o percentual
 	// sobre o preço, saindo da parte do Neon Flow (RN-03.14).
@@ -177,44 +193,124 @@ func (r *TransferRepository) mutate(ctx context.Context, id, userID string, s st
 
 const actionDone = "concluido"
 
-// Offer abre ou reabre a oferta enquanto ninguém aceitou (RN-02.17, RN-02.22, RN-02.30).
-func (r *TransferRepository) Offer(ctx context.Context, id, userID string, offerCents int64, expiresAt time.Time) (transfer.Transfer, error) {
+// Drivers lista quem pode fazer a corrida, com as outras corridas do mesmo dia e os carros de cada um.
+func (r *TransferRepository) Drivers(ctx context.Context, id string) ([]transfer.Driver, error) {
+	t, err := r.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, queryDrivers, id, t.PickupAt)
+	if err != nil {
+		return nil, fmt.Errorf("list drivers: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	list := []transfer.Driver{}
+	for rows.Next() {
+		var d transfer.Driver
+		var isDriver, isOwner bool
+		var sameDay, vehicles []byte
+		if err := rows.Scan(&d.PartnerID, &d.Name, &d.WhatsApp, &isDriver, &isOwner, &sameDay, &vehicles); err != nil {
+			return nil, fmt.Errorf("scan driver: %w", err)
+		}
+		d.Kinds = []string{}
+		if isDriver {
+			d.Kinds = append(d.Kinds, "motorista")
+		}
+		if isOwner {
+			d.Kinds = append(d.Kinds, "proprietario")
+		}
+		if err := json.Unmarshal(sameDay, &d.SameDay); err != nil {
+			return nil, fmt.Errorf("decode same day: %w", err)
+		}
+		for i := range d.SameDay {
+			d.SameDay[i] = d.SameDay[i].In(timezone.Location)
+		}
+		if err := json.Unmarshal(vehicles, &d.Vehicles); err != nil {
+			return nil, fmt.Errorf("decode vehicles: %w", err)
+		}
+		list = append(list, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list drivers: %w", err)
+	}
+	return list, nil
+}
+
+// Offer define ou aumenta o valor para o motorista enquanto ninguém aceitou (RN-02.22).
+func (r *TransferRepository) Offer(ctx context.Context, id, userID string, offerCents int64) (transfer.Transfer, error) {
 	return r.mutate(ctx, id, userID, func(_ context.Context, _ *sql.Tx, t transfer.Transfer) (string, []any, string, string, error) {
 		if t.Stage != transfer.StageWaiting {
 			return "", nil, "", "", transfer.ErrWrongStage
 		}
-		if t.OfferCents != nil && offerCents < *t.OfferCents {
-			return "", nil, "", "", transfer.ErrOfferDecreased
+		if err := transfer.ValidateOffer(offerCents, t.OfferCents); err != nil {
+			return "", nil, "", "", err
 		}
-		action := "oferta"
-		if t.OfferCents != nil {
-			action = "oferta_reaberta"
+		action, detail := "valor", transfer.FormatReais(offerCents)
+		if t.OfferCents != nil && offerCents > *t.OfferCents {
+			action, detail = "valor_aumentado", transfer.FormatReais(*t.OfferCents)+" → "+detail
 		}
-		return `UPDATE transfers SET offer_cents = $2, offer_expires_at = $3, updated_at = now() WHERE id = $1`,
-			[]any{offerCents, expiresAt}, action, fmt.Sprintf("%d centavos até %s", offerCents, expiresAt.In(timezone.Location).Format("02/01 15:04")), nil
+		return `UPDATE transfers SET offer_cents = $2, updated_at = now() WHERE id = $1`, []any{offerCents}, action, detail, nil
 	})
 }
 
-// Accept registra o primeiro motorista que aceitou, pelo valor da oferta (RN-02.17, RN-03.9).
-func (r *TransferRepository) Accept(ctx context.Context, id, userID, driverID string) (transfer.Transfer, error) {
+// Notify registra que a central chamou o motorista pelo WhatsApp (RN-02.27).
+func (r *TransferRepository) Notify(ctx context.Context, id, userID, driverID string) (transfer.Transfer, error) {
 	return r.mutate(ctx, id, userID, func(ctx context.Context, tx *sql.Tx, t transfer.Transfer) (string, []any, string, string, error) {
 		if t.Stage != transfer.StageWaiting {
 			return "", nil, "", "", transfer.ErrWrongStage
 		}
-		if t.OfferCents == nil {
-			return "", nil, "", "", transfer.ErrNoOffer
+		name, err := driverName(ctx, tx, driverID)
+		if err != nil {
+			return "", nil, "", "", err
 		}
-		var ok bool
-		if err := tx.QueryRowContext(ctx, queryDriverOK, driverID).Scan(&ok); err != nil {
-			return "", nil, "", "", mapDriverError(err)
-		}
-		if !ok {
-			return "", nil, "", "", transfer.ErrDriverNotFound
-		}
-		return `UPDATE transfers SET stage = 'com_motorista', driver_partner_id = $2, driver_cents = offer_cents,
-			        offer_cents = NULL, offer_expires_at = NULL, updated_at = now() WHERE id = $1`,
-			[]any{driverID}, "aceito", "", nil
+		return `UPDATE transfers SET updated_at = now() WHERE id = $1`, nil, "avisado", name, nil
 	})
+}
+
+// Accept marca o motorista que aceitou, com o valor final e o carro da corrida (RN-02.17, RN-03.14).
+func (r *TransferRepository) Accept(ctx context.Context, id, userID string, req transfer.AcceptRequest) (transfer.Transfer, error) {
+	return r.mutate(ctx, id, userID, func(ctx context.Context, tx *sql.Tx, t transfer.Transfer) (string, []any, string, string, error) {
+		if t.Stage != transfer.StageWaiting {
+			return "", nil, "", "", transfer.ErrWrongStage
+		}
+		valid, err := req.Validate(t.OfferCents)
+		if err != nil {
+			return "", nil, "", "", err
+		}
+		value := t.OfferCents
+		if valid.OfferCents != nil {
+			value = valid.OfferCents
+		}
+		name, err := driverName(ctx, tx, valid.DriverPartnerID)
+		if err != nil {
+			return "", nil, "", "", err
+		}
+		if valid.VehicleID != "" {
+			var ok bool
+			if err := tx.QueryRowContext(ctx, queryVehicleOK, valid.VehicleID).Scan(&ok); err != nil {
+				return "", nil, "", "", fmt.Errorf("check vehicle: %w", err)
+			}
+			if !ok {
+				return "", nil, "", "", transfer.ErrVehicleNotFound
+			}
+		}
+		return `UPDATE transfers SET stage = 'com_motorista', driver_partner_id = $2, driver_cents = $3,
+			        vehicle_id = NULLIF($4, '')::uuid, offer_cents = NULL, updated_at = now() WHERE id = $1`,
+			[]any{valid.DriverPartnerID, *value, valid.VehicleID}, "aceito", name + " · " + transfer.FormatReais(*value), nil
+	})
+}
+
+func driverName(ctx context.Context, tx *sql.Tx, driverID string) (string, error) {
+	var name string
+	err := tx.QueryRowContext(ctx, queryDriverName, driverID).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", transfer.ErrDriverNotFound
+	}
+	if err != nil {
+		return "", mapDriverError(err)
+	}
+	return name, nil
 }
 
 // Release: o motorista desistiu; a corrida volta a ser oferecida, sem penalidade (RN-02.31).
@@ -227,8 +323,9 @@ func (r *TransferRepository) Release(ctx context.Context, id, userID string) (tr
 		if t.DriverName != nil {
 			detail = *t.DriverName
 		}
-		return `UPDATE transfers SET stage = 'aguardando_motorista', driver_partner_id = NULL, driver_cents = NULL,
-			        updated_at = now() WHERE id = $1`, nil, "desistiu", detail, nil
+		// O valor volta a valer para o próximo motorista.
+		return `UPDATE transfers SET stage = 'aguardando_motorista', offer_cents = driver_cents, driver_partner_id = NULL,
+			        driver_cents = NULL, vehicle_id = NULL, updated_at = now() WHERE id = $1`, nil, "desistiu", detail, nil
 	})
 }
 
@@ -280,7 +377,7 @@ func (r *TransferRepository) Cancel(ctx context.Context, id, userID string, feeC
 			detail = "voo cancelado pela companhia"
 		}
 		return `UPDATE transfers SET stage = 'cancelado', cancel_fee_cents = $2, flight_cancelled = $3,
-			        offer_cents = NULL, offer_expires_at = NULL, updated_at = now() WHERE id = $1`,
+			        offer_cents = NULL, updated_at = now() WHERE id = $1`,
 			[]any{feeCents, flightCancelled}, "cancelado", detail, nil
 	})
 }
@@ -303,21 +400,22 @@ func (r *TransferRepository) inTx(ctx context.Context, fn func(tx *sql.Tx) error
 func scan(s scanner) (transfer.Transfer, error) {
 	var t transfer.Transfer
 	var offer, driverCents sql.NullInt64
-	var offerExpires, paid sql.NullTime
-	var driverID, driverName, referred, createdBy sql.NullString
+	var paid sql.NullTime
+	var driverID, driverName, vehicleID, vehicleName, referred, createdBy sql.NullString
 	err := s.Scan(&t.ID, &t.ClientName, &t.PickupAt, &t.Origin, &t.Destination, &t.Flight, &t.Passengers, &t.Notes,
-		&t.PriceCents, &t.Stage, &offer, &offerExpires, &driverID, &driverName,
-		&driverCents, &paid, &t.ExtraWaitCents, &t.CancelFeeCents, &t.FlightCancelled,
+		&t.PriceCents, &t.Stage, &offer, &driverID, &driverName,
+		&driverCents, &vehicleID, &vehicleName, &paid, &t.ExtraWaitCents, &t.CancelFeeCents, &t.FlightCancelled,
 		&referred, &createdBy, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return t, err
 	}
 	t.PickupAt = t.PickupAt.In(timezone.Location)
 	t.OfferCents = nullInt64(offer)
-	t.OfferExpiresAt = localTime(offerExpires)
 	t.DriverPartnerID = nullString(driverID)
 	t.DriverName = nullString(driverName)
 	t.DriverCents = nullInt64(driverCents)
+	t.VehicleID = nullString(vehicleID)
+	t.VehicleName = nullString(vehicleName)
 	t.PaidAt = localTime(paid)
 	t.ReferredByPartnerID = nullString(referred)
 	t.CreatedBy = nullString(createdBy)

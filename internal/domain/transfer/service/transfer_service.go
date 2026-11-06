@@ -37,25 +37,31 @@ func (s *TransferService) Create(ctx context.Context, req transfer.CreateRequest
 	return s.repo.Create(ctx, n)
 }
 
-// Offer valida contra a oferta atual (não diminui, RN-02.22); o repository confere de novo com a corrida travada.
-func (s *TransferService) Offer(ctx context.Context, id, userID string, req transfer.OfferRequest) (transfer.Transfer, error) {
-	t, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return transfer.Transfer{}, err
-	}
-	if err := req.Validate(t.OfferCents); err != nil {
-		return transfer.Transfer{}, err
-	}
-	expires := s.now().Add(time.Duration(req.Minutes) * time.Minute)
-	return s.repo.Offer(ctx, id, userID, req.OfferCents, expires)
+// Drivers: quem pode fazer a corrida, com as outras corridas do dia e os carros de cada um.
+func (s *TransferService) Drivers(ctx context.Context, id string) ([]transfer.Driver, error) {
+	return s.repo.Drivers(ctx, id)
 }
 
-func (s *TransferService) Accept(ctx context.Context, id, userID string, req transfer.AcceptRequest) (transfer.Transfer, error) {
+// Offer define ou aumenta o valor para o motorista; o repository confere com a corrida travada (RN-02.22).
+func (s *TransferService) Offer(ctx context.Context, id, userID string, req transfer.OfferRequest) (transfer.Transfer, error) {
+	if err := transfer.ValidateOffer(req.OfferCents, nil); err != nil {
+		return transfer.Transfer{}, err
+	}
+	return s.repo.Offer(ctx, id, userID, req.OfferCents)
+}
+
+// Notify registra que a central chamou o motorista pelo WhatsApp.
+func (s *TransferService) Notify(ctx context.Context, id, userID string, req transfer.NotifyRequest) (transfer.Transfer, error) {
 	driver := strings.TrimSpace(req.DriverPartnerID)
 	if driver == "" {
 		return transfer.Transfer{}, transfer.ErrDriverNotFound
 	}
-	return s.repo.Accept(ctx, id, userID, driver)
+	return s.repo.Notify(ctx, id, userID, driver)
+}
+
+// Accept: o repository valida com a corrida travada (valor atual, motorista e carro).
+func (s *TransferService) Accept(ctx context.Context, id, userID string, req transfer.AcceptRequest) (transfer.Transfer, error) {
+	return s.repo.Accept(ctx, id, userID, req)
 }
 
 func (s *TransferService) Release(ctx context.Context, id, userID string) (transfer.Transfer, error) {

@@ -13,13 +13,14 @@ import (
 )
 
 type fakeRepo struct {
-	current   transfer.Transfer
-	expiresAt time.Time
-	fee       int64
-	flight    bool
-	driver    string
-	extra     int64
-	calls     []string
+	current  transfer.Transfer
+	offered  int64
+	notified string
+	accept   transfer.AcceptRequest
+	fee      int64
+	flight   bool
+	extra    int64
+	calls    []string
 }
 
 func (f *fakeRepo) List(context.Context) ([]transfer.Transfer, error) {
@@ -37,13 +38,19 @@ func (f *fakeRepo) Events(context.Context, string) ([]transfer.Event, error) {
 func (f *fakeRepo) Create(_ context.Context, n transfer.NewTransfer) (transfer.Transfer, error) {
 	return transfer.Transfer{ID: "t1", ClientName: n.ClientName}, nil
 }
-func (f *fakeRepo) Offer(_ context.Context, _, _ string, cents int64, expires time.Time) (transfer.Transfer, error) {
-	f.expiresAt = expires
-	f.current.OfferCents = &cents
+func (f *fakeRepo) Drivers(context.Context, string) ([]transfer.Driver, error) {
+	return []transfer.Driver{{Name: "Motorista"}}, nil
+}
+func (f *fakeRepo) Offer(_ context.Context, _, _ string, cents int64) (transfer.Transfer, error) {
+	f.offered = cents
 	return f.current, nil
 }
-func (f *fakeRepo) Accept(_ context.Context, _, _, driver string) (transfer.Transfer, error) {
-	f.driver = driver
+func (f *fakeRepo) Notify(_ context.Context, _, _, driver string) (transfer.Transfer, error) {
+	f.notified = driver
+	return f.current, nil
+}
+func (f *fakeRepo) Accept(_ context.Context, _, _ string, req transfer.AcceptRequest) (transfer.Transfer, error) {
+	f.accept = req
 	return f.current, nil
 }
 func (f *fakeRepo) Release(context.Context, string, string) (transfer.Transfer, error) {
@@ -91,18 +98,26 @@ func TestTransferService(t *testing.T) {
 	_, err = svc.Create(ctx, transfer.CreateRequest{}, "u1")
 	assert.ErrorIs(t, err, transfer.ErrClientRequired)
 
-	// Oferta: prazo a partir de agora; reabrir com valor menor é recusado (RN-02.22).
-	_, err = svc.Offer(ctx, "t1", "u1", transfer.OfferRequest{OfferCents: 20000, Minutes: 30})
+	drivers, err := svc.Drivers(ctx, "t1")
 	require.NoError(t, err)
-	assert.True(t, repo.expiresAt.Equal(now.Add(30*time.Minute)))
-	_, err = svc.Offer(ctx, "t1", "u1", transfer.OfferRequest{OfferCents: 15000, Minutes: 30})
-	assert.ErrorIs(t, err, transfer.ErrOfferDecreased)
+	assert.Len(t, drivers, 1)
 
-	_, err = svc.Accept(ctx, "t1", "u1", transfer.AcceptRequest{DriverPartnerID: " p1 "})
+	// Valor para o motorista; o repository confere se não diminui (RN-02.22).
+	_, err = svc.Offer(ctx, "t1", "u1", transfer.OfferRequest{OfferCents: 20000})
 	require.NoError(t, err)
-	assert.Equal(t, "p1", repo.driver)
-	_, err = svc.Accept(ctx, "t1", "u1", transfer.AcceptRequest{})
+	assert.Equal(t, int64(20000), repo.offered)
+	_, err = svc.Offer(ctx, "t1", "u1", transfer.OfferRequest{})
+	assert.ErrorIs(t, err, transfer.ErrInvalidOffer)
+
+	_, err = svc.Notify(ctx, "t1", "u1", transfer.NotifyRequest{DriverPartnerID: " p1 "})
+	require.NoError(t, err)
+	assert.Equal(t, "p1", repo.notified)
+	_, err = svc.Notify(ctx, "t1", "u1", transfer.NotifyRequest{})
 	assert.ErrorIs(t, err, transfer.ErrDriverNotFound)
+
+	_, err = svc.Accept(ctx, "t1", "u1", transfer.AcceptRequest{DriverPartnerID: "p1", VehicleID: "v1"})
+	require.NoError(t, err)
+	assert.Equal(t, "v1", repo.accept.VehicleID)
 
 	_, err = svc.Release(ctx, "t1", "u1")
 	require.NoError(t, err)
@@ -132,8 +147,6 @@ func TestTransferService(t *testing.T) {
 	assert.ErrorIs(t, err, transfer.ErrWrongStage)
 
 	repo.current = transfer.Transfer{}
-	_, err = svc.Offer(ctx, "x", "u1", transfer.OfferRequest{OfferCents: 1, Minutes: 1})
-	assert.ErrorIs(t, err, transfer.ErrNotFound)
 	_, err = svc.Cancel(ctx, "x", "u1", transfer.CancelRequest{})
 	assert.ErrorIs(t, err, transfer.ErrNotFound)
 }

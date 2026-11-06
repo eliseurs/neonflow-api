@@ -20,7 +20,7 @@ func TestRegister(t *testing.T) {
 	for _, r := range app.Router().Routes() {
 		got[r.Method+" "+r.Path] = true
 	}
-	for _, want := range []string{"GET /api/transfers", "POST /api/transfers", "GET /api/transfers/:id", "GET /api/transfers/:id/events", "POST /api/transfers/:id/offer", "POST /api/transfers/:id/accept", "POST /api/transfers/:id/release", "PATCH /api/transfers/:id/paid", "POST /api/transfers/:id/start", "POST /api/transfers/:id/complete", "POST /api/transfers/:id/cancel"} {
+	for _, want := range []string{"GET /api/transfers", "POST /api/transfers", "GET /api/transfers/:id", "GET /api/transfers/:id/events", "GET /api/transfers/:id/drivers", "POST /api/transfers/:id/offer", "POST /api/transfers/:id/notify", "POST /api/transfers/:id/accept", "POST /api/transfers/:id/release", "PATCH /api/transfers/:id/paid", "POST /api/transfers/:id/start", "POST /api/transfers/:id/complete", "POST /api/transfers/:id/cancel"} {
 		assert.True(t, got[want], want)
 	}
 }

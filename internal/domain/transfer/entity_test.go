@@ -47,13 +47,39 @@ func TestCreateRequestValidate(t *testing.T) {
 	}
 }
 
-func TestOfferValidate(t *testing.T) {
-	assert.NoError(t, OfferRequest{OfferCents: 20000, Minutes: 30}.Validate(nil))
-	assert.NoError(t, OfferRequest{OfferCents: 25000, Minutes: 30}.Validate(ptr(int64(20000))))
-	assert.ErrorIs(t, OfferRequest{OfferCents: 0, Minutes: 30}.Validate(nil), ErrInvalidOffer)
-	assert.ErrorIs(t, OfferRequest{OfferCents: 15000, Minutes: 30}.Validate(ptr(int64(20000))), ErrOfferDecreased)
-	assert.ErrorIs(t, OfferRequest{OfferCents: 20000, Minutes: 0}.Validate(nil), ErrInvalidDeadline)
-	assert.ErrorIs(t, OfferRequest{OfferCents: 20000, Minutes: MaxOfferMinutes + 1}.Validate(nil), ErrInvalidDeadline)
+func TestValidateOffer(t *testing.T) {
+	assert.NoError(t, ValidateOffer(20000, nil))
+	assert.NoError(t, ValidateOffer(25000, ptr(int64(20000))))
+	assert.NoError(t, ValidateOffer(20000, ptr(int64(20000))))
+	assert.ErrorIs(t, ValidateOffer(0, nil), ErrInvalidOffer)
+	assert.ErrorIs(t, ValidateOffer(15000, ptr(int64(20000))), ErrOfferDecreased)
+}
+
+func TestAcceptRequestValidate(t *testing.T) {
+	id := "00000000-0000-0000-0000-000000000001"
+	r, err := AcceptRequest{DriverPartnerID: " " + id + " ", VehicleID: " " + id + " "}.Validate(ptr(int64(20000)))
+	require.NoError(t, err)
+	assert.Equal(t, id, r.DriverPartnerID)
+	assert.Equal(t, id, r.VehicleID)
+	_, err = AcceptRequest{DriverPartnerID: id, OfferCents: ptr(int64(30000))}.Validate(nil)
+	require.NoError(t, err, "valor informado no aceite dispensa o anterior")
+
+	_, err = AcceptRequest{DriverPartnerID: "x"}.Validate(ptr(int64(1)))
+	assert.ErrorIs(t, err, ErrDriverNotFound)
+	_, err = AcceptRequest{DriverPartnerID: id, VehicleID: "x"}.Validate(ptr(int64(1)))
+	assert.ErrorIs(t, err, ErrVehicleNotFound)
+	_, err = AcceptRequest{DriverPartnerID: id}.Validate(nil)
+	assert.ErrorIs(t, err, ErrNoOffer)
+	_, err = AcceptRequest{DriverPartnerID: id, OfferCents: ptr(int64(100))}.Validate(ptr(int64(200)))
+	assert.ErrorIs(t, err, ErrOfferDecreased)
+}
+
+func TestFormatReais(t *testing.T) {
+	assert.Equal(t, "R$ 350,00", FormatReais(35000))
+	assert.Equal(t, "R$ 1.350,05", FormatReais(135005))
+	assert.Equal(t, "R$ 1.234.567,89", FormatReais(123456789))
+	assert.Equal(t, "R$ 0,07", FormatReais(7))
+	assert.Equal(t, "-R$ 10,00", FormatReais(-1000))
 }
 
 func TestCancelFee(t *testing.T) {
