@@ -65,7 +65,7 @@ railway logs --service neonflow-api
 
 ### Estado atual
 
-Auth (`/api/auth/*`), frota (`/api/vehicles`) e reservas (`/api/bookings`, `/api/availability`), operados pela central. Reserva com bloqueio atômico no banco, etapas com conferências e histórico. Plano em `docs/plano-reserva-persistente.md`; suposições abertas: horário e fuso (PEN-29), dados do cliente (PEN-48) e tenant (PEN-49).
+Auth (`/api/auth/*`), frota (`/api/vehicles`) e reservas (`/api/bookings`, `/api/availability`), operados pela central. Reserva com bloqueio atômico no banco, etapas com conferências e histórico. Plano em `docs/plano-reserva-persistente.md`; a reserva ainda é só por data: o horário foi decidido em 06/11/2026 (RN-02.23 a 02.26, PEN-29) e falta implementar. Em aberto: dados do cliente (PEN-48), tenant (PEN-49) e o conflito da q71 sobre o momento do pagamento (RN-02).
 
 ### Ambientes
 

@@ -14,8 +14,9 @@
 | RN-03.8 | A comissão do indicador e o pagamento do motorista são repassados **depois do pagamento concluído e do serviço finalizado** | aprovada (05/11/2026, fundador, q52) | — | PEN-08, PEN-09 |
 | RN-03.9 | O motorista recebe um **percentual da corrida** | aprovada (04/11/2026, fundador); percentual não definido | — | PEN-09 |
 | RN-03.10 | Dono e motorista são a **mesma pessoa só no transfer e no passeio** (aluguel com motorista): o dono dirige o próprio carro. No aluguel sem motorista, quem dirige é o cliente que alugou | aprovada (05/11/2026, fundador, q60) | — | PEN-09 |
+| RN-03.11 | O **estorno** de um cancelamento é feito **manualmente pela central**. O valor segue RN-02.10 (transfer) e RN-02.21 (aluguel) | aprovada (06/11/2026, fundador, q72) | — | PEN-05, PEN-30 |
 
-**Fontes:** Revisão 29/09 §13–15; Dossiê C.5, D e F; questionário do fundador em 03/11/2026 (RN-03.4 a RN-03.6), 04/11/2026 (RN-03.7 a RN-03.9) e 05/11/2026 (RN-03.7, RN-03.8, RN-03.10).
+**Fontes:** Revisão 29/09 §13–15; Dossiê C.5, D e F; questionário do fundador em 03/11/2026 (RN-03.4 a RN-03.6), 04/11/2026 (RN-03.7 a RN-03.9) 05/11/2026 (RN-03.7, RN-03.8, RN-03.10) e 06/11/2026 (RN-03.11).
 
 ## Detalhes
 

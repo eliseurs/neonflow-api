@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Rodada 4 do questionário do fundador (q66–q86)
+
+- Respostas registradas: RN-01.3 aprovada ("Reservado" com a próxima reserva), RN-01.6 com os itens extras do checklist, RN-01.7 (fotos no cadastro do veículo), RN-02.18 (km livre ou limitado, excedente cobrado), RN-02.23 a RN-02.27 (horário livre, diária de 24h, saída no mesmo dia com checklist, central 24h, transfer pelo WhatsApp e pelo painel do motorista), RN-03.11 (estorno manual), RN-04.4 a RN-04.6 (dados do cliente, encarregado da LGPD, portal do cliente), RN-05.6 (só o fundador usa o painel no início), RN-06.4 (caução por veículo). ADR-0013: Stripe, estorno manual, caução por veículo.
+- **Conflito registrado, não resolvido:** q71 (pagamento e caução na retirada) contra RN-02.14/ADR-0013 (pagamento integral ao reservar). Vale o implementado até o fundador confirmar.
+- Suposição técnica: fuso `America/Sao_Paulo`.
+- `docs/pendencias.md`: PEN-28 e PEN-29 resolvidas; PEN-11, PEN-14, PEN-15 e PEN-48 parciais; PEN-01, 02, 03, 05, 07, 18, 64 e 65 atualizadas. Totais: 31 resolvidas, 14 parciais, 21 abertas.
+
+---
+
 ## [2026-11-05] — WhatsApp da central (PEN-66)
 
 - PEN-66 resolvida: número da central +55 51 99719-2854, definido em `VITE_WHATSAPP_NUMBER` do `neonflow-app` no Railway `hml`. O botão flutuante, o rodapé e o formulário da landing já abrem o WhatsApp.

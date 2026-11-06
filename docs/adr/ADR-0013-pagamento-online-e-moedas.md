@@ -18,10 +18,14 @@ O ADR-0011 definiu três canais para fechar a reserva (WhatsApp, formulário e p
 | Contrato | **Aceite dos termos no site**, registrado. Sem assinatura eletrônica por enquanto | q38, q18 |
 | Moeda | **Real e dólar.** O dólar é **só exibido**, como conversão na tela para o turista estrangeiro; a cobrança é sempre em reais | q30, q62, q63 |
 | Valores | Tarifas, referências do transfer e hora extra de espera são **configuráveis** pela operação; nenhum valor fica no código | q26, q31 |
+| Provedor do pagamento online | **Stripe**, quando o pagamento online for integrado. Até lá, tudo pela central, por Pix ou link | q70 (06/11/2026) |
+| Estorno | Feito **manualmente pela central** (RN-03.11) | q72 (06/11/2026) |
+| Caução | Pré-autorização no cartão, com valor **por veículo** (RN-06.4) | q73 (06/11/2026) |
 
 ## Consequências
 
-- O provedor de pagamento é uma escolha da engenharia (PEN-05). Ele precisa aceitar cartão internacional e pré-autorização para a caução (RN-06.4).
+- Provedor escolhido pelo fundador: Stripe (q70). Ele aceita cartão internacional e pré-autorização (captura manual), necessária para a caução (RN-06.4). Conferir na integração a oferta de Pix no Brasil pela Stripe; se não cobrir, o Pix continua pela central.
+- **Conflito em aberto (q71, 06/11/2026):** o fundador marcou "aceite no site; pagamento e caução na retirada", o que contradiz o pagamento integral ao reservar (q37, q53) e a expiração da pré-reserva em 24h (ADR-0012). A decisão desta ADR continua valendo até o fundador confirmar.
 - O aceite precisa guardar a data e a hora, a versão dos termos aceita e a reserva. Isso exige versionar o texto dos termos.
 - A cotação do dólar precisa de fonte e frequência de atualização. Como só é exibida, não entra na conciliação.
 - No lançamento, a reserva precisa de uma ação da central para marcar o pagamento como confirmado (Pix ou link). A pré-reserva que a central não confirmar em 24h expira (RN-02.11).
@@ -29,4 +33,4 @@ O ADR-0011 definiu três canais para fechar a reserva (WhatsApp, formulário e p
 
 ## Fontes
 
-- Questionário "Decisões do Neon Flow", q18, q26, q30, q31, q37, q38 e q47 (03 e 04/11/2026); q53, q62 e q63 (05/11/2026).
+- Questionário "Decisões do Neon Flow", q18, q26, q30, q31, q37, q38 e q47 (03 e 04/11/2026); q53, q62 e q63 (05/11/2026); q70 a q73 (06/11/2026).
