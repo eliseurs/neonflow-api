@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: Lint, testes e cobertura
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: neonflow
+          POSTGRES_PASSWORD: neonflow
+          POSTGRES_DB: neonflow_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U neonflow -d neonflow_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Banco descartável do job: os testes de integração recriam o schema.
+      TEST_DATABASE_URL: postgres://neonflow:neonflow@localhost:5432/neonflow_test?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Lint (gofmt + go vet)
+        run: make lint
+
+      - name: Build
+        run: go build -trimpath -o bin/ ./cmd/...
+
+      - name: Testes unitários e de integração
+        run: make test-integration
+
+      - name: Cobertura de internal/ (mínimo 80%)
+        run: |
+          make cover
+          total=$(go tool cover -func=cover.out | awk '/^total:/ {sub("%", "", $3); print $3}')
+          echo "Cobertura: ${total}%"
+          awk -v t="$total" 'BEGIN { exit (t + 0 >= 80) ? 0 : 1 }' || { echo "::error::Cobertura ${total}% abaixo de 80%"; exit 1; }

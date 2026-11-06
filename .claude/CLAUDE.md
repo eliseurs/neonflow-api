@@ -40,6 +40,8 @@ make test                          # unitários
 make test-integration              # + integração (TEST_DATABASE_URL=postgres://neonflow:neonflow@localhost:5432/neonflow_test?sslmode=disable)
 make cover                         # cobertura de internal/ (meta 80%)
 
+# CI: .github/workflows/ci.yml roda lint, build, testes de integração e cobertura (mín. 80%) em todo PR
+
 # Database
 make migrate-up                    # aplica migrations
 make migrate-down                  # desfaz a última
