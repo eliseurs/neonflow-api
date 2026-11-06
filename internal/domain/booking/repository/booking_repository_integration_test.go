@@ -333,7 +333,7 @@ func TestBookingRepository_ActualTimes(t *testing.T) {
 		Period: period(t, "2026-12-10T10:00", "2026-12-12T10:00"), CreatedBy: userID})
 	require.NoError(t, err)
 	assert.Nil(t, b.DeliveredAt)
-	assert.Zero(t, b.ExtraDays)
+	assert.Zero(t, b.ExtraMinutes)
 
 	_, err = repo.Transition(ctx, b.ID, booking.StagePreparacao, booking.StageConfirmada, userID, booking.Record{})
 	require.NoError(t, err)
@@ -347,14 +347,14 @@ func TestBookingRepository_ActualTimes(t *testing.T) {
 	assert.Equal(t, "America/Sao_Paulo", out.DeliveredAt.Location().String())
 	assert.Nil(t, out.ReturnedAt)
 
-	days, cents := 1, int64(10000)
+	minutes, cents := 300, int64(2083)
 	back, err := repo.Transition(ctx, b.ID, booking.StageEmLocacao, booking.StageDevolvida, userID,
-		booking.Record{ReturnedAt: &delivered.End, ExtraDays: &days, ExtraCents: &cents})
+		booking.Record{ReturnedAt: &delivered.End, ExtraMinutes: &minutes, ExtraCents: &cents})
 	require.NoError(t, err)
 	assert.True(t, delivered.Start.Equal(*back.DeliveredAt), "campos nulos mantêm o valor")
 	assert.True(t, delivered.End.Equal(*back.ReturnedAt))
-	assert.Equal(t, 1, back.ExtraDays)
-	assert.Equal(t, int64(10000), back.ExtraCents)
+	assert.Equal(t, 300, back.ExtraMinutes)
+	assert.Equal(t, int64(2083), back.ExtraCents)
 	assert.Equal(t, int64(20000), back.TotalCents, "o total combinado não muda")
 
 	// O banco recusa devolução antes da entrega.

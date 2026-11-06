@@ -25,7 +25,7 @@ O ADR-0011 definiu três canais para fechar a reserva (WhatsApp, formulário e p
 ## Consequências
 
 - Provedor escolhido pelo fundador: Stripe (q70). Ele aceita cartão internacional e pré-autorização (captura manual), necessária para a caução (RN-06.4). Conferir na integração a oferta de Pix no Brasil pela Stripe; se não cobrir, o Pix continua pela central.
-- **Conflito em aberto (q71, 06/11/2026):** o fundador marcou "aceite no site; pagamento e caução na retirada", o que contradiz o pagamento integral ao reservar (q37, q53) e a expiração da pré-reserva em 24h (ADR-0012). A decisão desta ADR continua valendo até o fundador confirmar.
+- **Conflito da q71 resolvido (06/11/2026):** o fundador tinha marcado "aceite no site; pagamento e caução na retirada". Na q88 escolheu manter a pré-reserva que cancela sem confirmação em 24h, então a decisão desta ADR continua valendo: pagamento integral ao reservar e caução na retirada.
 - O aceite precisa guardar a data e a hora, a versão dos termos aceita e a reserva. Isso exige versionar o texto dos termos.
 - A cotação do dólar precisa de fonte e frequência de atualização. Como só é exibida, não entra na conciliação.
 - No lançamento, a reserva precisa de uma ação da central para marcar o pagamento como confirmado (Pix ou link). A pré-reserva que a central não confirmar em 24h expira (RN-02.11).

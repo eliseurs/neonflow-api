@@ -20,6 +20,11 @@ func TestVehicleRequestValidate(t *testing.T) {
 	full.DepositCents, full.KmLimitPerDay, full.ExtraKmCents = ptr(int64(100000)), ptr(200), ptr(int64(150))
 	_, err := full.Validate()
 	require.NoError(t, err)
+	// Km controlado sem valor do excedente: aceito, o valor fica a definir (RN-02.18).
+	onlyLimit := validRequest()
+	onlyLimit.KmLimitPerDay = ptr(200)
+	_, err = onlyLimit.Validate()
+	require.NoError(t, err)
 
 	got, err := validRequest().Validate()
 	require.NoError(t, err)
@@ -49,7 +54,7 @@ func TestVehicleRequestValidate(t *testing.T) {
 		{"caução", func(r *VehicleRequest) { r.DepositCents = ptr(int64(0)) }, ErrInvalidDeposit},
 		{"limite de km", func(r *VehicleRequest) { r.KmLimitPerDay, r.ExtraKmCents = ptr(0), ptr(int64(150)) }, ErrInvalidKmPlan},
 		{"km excedente", func(r *VehicleRequest) { r.KmLimitPerDay, r.ExtraKmCents = ptr(200), ptr(int64(-1)) }, ErrInvalidKmPlan},
-		{"km sem valor", func(r *VehicleRequest) { r.KmLimitPerDay = ptr(200) }, ErrKmPlanIncomplete},
+
 		{"valor sem km", func(r *VehicleRequest) { r.ExtraKmCents = ptr(int64(150)) }, ErrKmPlanIncomplete},
 		{"proprietário", func(r *VehicleRequest) { r.OwnerPartnerID = ptr("nao-e-uuid") }, ErrOwnerPartnerNotFound},
 	}

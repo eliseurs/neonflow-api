@@ -20,6 +20,6 @@ Vale para o **aluguel sem motorista**. No aluguel com motorista e no transfer, q
 - **RN-06.1:** seguradoras costumam ter idade mínima própria para o condutor; conferir com a apólice.
 - **RN-06.3:** a habilitação estrangeira só vale no Brasil em certas condições (país de origem, prazo de estadia, às vezes tradução ou Permissão Internacional). O fundador **vai confirmar com o advogado** (05/11/2026, q64; PEN-50). Até lá, não liberar o aluguel sem motorista para estrangeiros sem CNH brasileira.
 - Valor da caução: por veículo (q73), cadastrado com o veículo como a diária (RN-01.2). A franquia não foi perguntada; pelo padrão das respostas, também configurável.
-- Momento da caução: na q71 o fundador marcou "pagamento e caução na retirada". A caução na retirada é compatível com o resto; o pagamento na retirada é conflito (ver RN-02, pontos em aberto).
+- Momento da caução: **na retirada** (q71). O pagamento na retirada, marcado na mesma pergunta, foi descartado pela q88 (06/11/2026): o pagamento continua na reserva (RN-02.14).
 - RN-06.6: o fundador não marcou se há taxa administrativa sobre a multa repassada nem se ela pode ser descontada da caução. Danos seguem RN-06.5 (franquia).
 - Documentos do condutor (CNH, passaporte) são dados pessoais: armazenamento e retenção seguem PEN-48 (LGPD).

@@ -64,31 +64,41 @@ func TestPeriodDays(t *testing.T) {
 	}
 }
 
-func TestLateDays(t *testing.T) {
+func TestLateMinutes(t *testing.T) {
 	end := time.Date(2026, 12, 12, 10, 0, 0, 0, timezone.Location)
-	// RN-02.19: até 1 hora de tolerância; passado isso, 1 diária por bloco de 24 horas iniciado.
+	// RN-02.19: até 1 hora de tolerância; passado isso, os minutos exatos desde o combinado.
 	cases := []struct {
 		returned time.Duration
-		days     int
+		minutes  int
 	}{
 		{-3 * time.Hour, 0},
 		{0, 0},
 		{time.Hour, 0},
-		{time.Hour + time.Minute, 1},
-		{25 * time.Hour, 1},
-		{25*time.Hour + time.Minute, 2},
+		{time.Hour + time.Second, 60},
+		{time.Hour + 5*time.Minute, 65},
+		{5*time.Hour + 12*time.Minute + 59*time.Second, 312},
+		{30 * time.Hour, 1800},
 	}
 	for _, tc := range cases {
-		assert.Equal(t, tc.days, LateDays(end, end.Add(tc.returned)), tc.returned.String())
+		assert.Equal(t, tc.minutes, LateMinutes(end, end.Add(tc.returned)), tc.returned.String())
 	}
 }
 
+func TestLateCents(t *testing.T) {
+	// Diária ÷ 1440 por minuto; 1440 minutos = 1 diária.
+	assert.Equal(t, int64(0), LateCents(0, 14400))
+	assert.Equal(t, int64(650), LateCents(65, 14400))
+	assert.Equal(t, int64(14400), LateCents(1440, 14400))
+	assert.Equal(t, int64(18000), LateCents(1800, 14400), "30 horas = 1 diária + 6 horas")
+	assert.Equal(t, int64(451), LateCents(65, 10000), "arredonda ao centavo")
+}
+
 func TestExcessKm(t *testing.T) {
-	// RN-02.18: franquia = limite por dia × diárias cobradas.
+	// RN-02.18: franquia = limite por dia × diárias contratadas (q90).
 	assert.Equal(t, 0, ExcessKm(200, 3, 600))
 	assert.Equal(t, 0, ExcessKm(200, 3, 120))
 	assert.Equal(t, 50, ExcessKm(200, 3, 650))
-	assert.Equal(t, 0, ExcessKm(200, 4, 650), "diária de atraso também traz franquia")
+	assert.Equal(t, 0, ExcessKm(200, 4, 650))
 }
 
 func TestCreateRequestValidate(t *testing.T) {
