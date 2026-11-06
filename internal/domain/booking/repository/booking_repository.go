@@ -12,13 +12,14 @@ import (
 
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/fleet"
+	"neonflow-api/internal/pkg/timezone"
 )
 
 const (
 	exclusionViolation        = "23P01"
 	invalidTextRepresentation = "22P02"
 
-	bookingColumns = `id, vehicle_id, client_name, start_date, end_date, place, stage, days,
+	bookingColumns = `id, vehicle_id, client_name, start_at, end_at, place, stage, days,
 		daily_rate_cents, total_cents, checks, expires_at, created_by, created_at, updated_at`
 
 	// queryExpire cancela pré-reservas não pagas no prazo e registra a transição (RN-02.11).
@@ -39,7 +40,7 @@ const (
 		SELECT ` + bookingColumns + `
 		FROM bookings
 		WHERE ($1 = '' OR vehicle_id::text = $1)
-		ORDER BY start_date, created_at
+		ORDER BY start_at, created_at
 	`
 	queryFindByID = `
 		SELECT ` + bookingColumns + `
@@ -60,7 +61,7 @@ const (
 	`
 	// A diária do veículo é copiada para a reserva: mudar a tarifa depois não altera o total (RN-02.6).
 	queryCreate = `
-		INSERT INTO bookings (vehicle_id, client_name, start_date, end_date, place, days,
+		INSERT INTO bookings (vehicle_id, client_name, start_at, end_at, place, days,
 		                      daily_rate_cents, total_cents, expires_at, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(secs => $9), NULLIF($10, '')::uuid)
 		RETURNING ` + bookingColumns
@@ -100,7 +101,7 @@ const (
 			SELECT 1 FROM bookings b
 			WHERE b.vehicle_id = v.id
 			  AND b.stage NOT IN ('encerrada', 'cancelada')
-			  AND daterange(b.start_date, b.end_date) && daterange($1::date, $2::date)
+			  AND tstzrange(b.start_at, b.end_at) && tstzrange($1::timestamptz, $2::timestamptz)
 		  )
 		ORDER BY v.category, v.name, v.plate
 	`
@@ -336,8 +337,10 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	if err != nil {
 		return b, err
 	}
-	b.StartDate = start.Format(booking.DateLayout)
-	b.EndDate = end.Format(booking.DateLayout)
+	b.StartAt = start.In(timezone.Location)
+	b.EndAt = end.In(timezone.Location)
+	b.StartDate = timezone.Date(start)
+	b.EndDate = timezone.Date(end)
 	b.CreatedBy = nullable(createdBy)
 	b.Checks = map[string]bool{}
 	if err := json.Unmarshal(checks, &b.Checks); err != nil {

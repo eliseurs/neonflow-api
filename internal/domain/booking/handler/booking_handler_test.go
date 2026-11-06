@@ -87,6 +87,7 @@ func TestBookingHandler_OK(t *testing.T) {
 		want               string
 	}{
 		{http.MethodGet, "/availability?start_date=2026-12-10&end_date=2026-12-12", "", http.StatusOK, `"id":"2026-12-10_2026-12-12"`},
+		{http.MethodGet, "/availability?start_at=2026-12-10T14:00&end_at=2026-12-12T10:00&start_date=x", "", http.StatusOK, `"id":"2026-12-10T14:00_2026-12-12T10:00"`},
 		{http.MethodGet, "/bookings?vehicle_id=v1", "", http.StatusOK, `"vehicle_id":"v1"`},
 		{http.MethodGet, "/bookings/b9", "", http.StatusOK, `"id":"b9"`},
 		{http.MethodGet, "/bookings/b9/events", "", http.StatusOK, `"to_stage":"preparacao"`},

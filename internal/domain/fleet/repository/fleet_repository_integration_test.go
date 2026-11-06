@@ -77,14 +77,14 @@ func TestFleetRepository_Status(t *testing.T) {
 		require.NoError(t, err)
 		return v.ID
 	}
-	// Datas relativas a hoje em Gramado, como a consulta.
+	// Retirada e devolução em dias relativos a agora, como a consulta.
 	book := func(vehicleID, stage string, startOffset, endOffset int, expiresIn string, paid bool) string {
 		var id string
 		require.NoError(t, database.QueryRowContext(ctx, `
-			INSERT INTO bookings (vehicle_id, client_name, start_date, end_date, stage, days,
+			INSERT INTO bookings (vehicle_id, client_name, start_at, end_at, stage, days,
 			                      daily_rate_cents, total_cents, checks, expires_at)
-			VALUES ($1, 'Cliente Teste', (now() AT TIME ZONE 'America/Sao_Paulo')::date + $2::int,
-			        (now() AT TIME ZONE 'America/Sao_Paulo')::date + $3::int, $4, $3::int - $2::int,
+			VALUES ($1, 'Cliente Teste', now() + make_interval(days => $2::int),
+			        now() + make_interval(days => $3::int), $4, greatest($3::int - $2::int, 1),
 			        10000, 10000, jsonb_build_object('payment', $5::boolean), now() + $6::interval)
 			RETURNING id`, vehicleID, startOffset, endOffset, stage, paid, expiresIn).Scan(&id))
 		return id
@@ -129,6 +129,8 @@ func TestFleetRepository_Status(t *testing.T) {
 	assert.Equal(t, "confirmada", byID[reservado].NextBooking.Stage)
 	assert.Equal(t, "Cliente Teste", byID[reservado].NextBooking.ClientName)
 	assert.Len(t, byID[reservado].NextBooking.StartDate, len("2006-01-02"))
+	assert.Equal(t, "America/Sao_Paulo", byID[reservado].NextBooking.StartAt.Location().String())
+	assert.True(t, byID[reservado].NextBooking.EndAt.After(byID[reservado].NextBooking.StartAt))
 	assert.Equal(t, fleet.StatusEmLocacao, byID[emLocacao].Status)
 	assert.Equal(t, fleet.StatusAguardandoChecklist, byID[aguardando].Status)
 	assert.Equal(t, fleet.StatusManutencao, byID[manutencao].Status, "manutenção prevalece (RN-01.1)")

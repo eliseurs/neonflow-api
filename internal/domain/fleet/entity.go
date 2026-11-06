@@ -46,11 +46,13 @@ type Vehicle struct {
 
 // NextBooking é a próxima reserva ativa que ainda não terminou: confirmada ou pré-reserva no prazo (RN-01.3).
 type NextBooking struct {
-	ID         string `json:"id"`
-	ClientName string `json:"client_name"`
-	StartDate  string `json:"start_date"`
-	EndDate    string `json:"end_date"`
-	Stage      string `json:"stage"`
+	ID         string    `json:"id"`
+	ClientName string    `json:"client_name"`
+	StartAt    time.Time `json:"start_at"`
+	EndAt      time.Time `json:"end_at"`
+	StartDate  string    `json:"start_date"` // dia de StartAt em Gramado; mantido por compatibilidade
+	EndDate    string    `json:"end_date"`
+	Stage      string    `json:"stage"`
 }
 
 // VehicleRequest é o corpo de criação e de atualização (PUT substitui todos os campos).

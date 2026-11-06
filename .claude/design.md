@@ -42,6 +42,7 @@ internal/
   config/                   # settings (env + defaults locais)
   pkg/
     middleware/             # JWT auth, role guard, CORS
+    timezone/               # fuso da operação (America/Sao_Paulo)
     security/               # TokenProvider (JWT), BcryptHasher
     logger/                 # slog (JSON em produção)
   testutil/                 # banco de teste (só build tag integration)
@@ -65,11 +66,11 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/vehicles/:id` | admin, central | Um veículo, com `status` e `next_booking` |
 | POST | `/api/vehicles` | admin, central | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance`) |
 | PUT | `/api/vehicles/:id` | admin, central | Substitui todos os campos (inclusive manutenção) |
-| GET | `/api/availability?start_date=&end_date=` | admin, central | Veículos fora de manutenção e sem reserva ativa no período |
+| GET | `/api/availability?start_at=&end_at=` | admin, central | Veículos fora de manutenção e sem reserva ativa no intervalo (`start_date`/`end_date` só com a data ainda são aceitos e viram 09:00) |
 | GET | `/api/bookings?vehicle_id=` | admin, central | Lista reservas |
 | GET | `/api/bookings/:id` | admin, central | Uma reserva |
 | GET | `/api/bookings/:id/events` | admin, central | Histórico de etapas |
-| POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_date`, `end_date`, `place`): bloqueia o período |
+| POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_at`, `end_at`, `place`): bloqueia o intervalo. Data e hora `AAAA-MM-DDTHH:MM` no horário de Gramado ou RFC 3339 |
 | PATCH | `/api/bookings/:id/checks` | admin, central | Marca conferências da etapa atual (`{"cnh": true}`) |
 | POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas |
 | POST | `/api/bookings/:id/cancel` | admin, central | Cancela (preparação ou confirmada) e libera o período |
@@ -105,13 +106,14 @@ vehicles
   daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
 
 bookings
-  id, vehicle_id FK, client_name, start_date DATE, end_date DATE, place
+  id, vehicle_id FK, client_name, start_at TIMESTAMPTZ, end_at TIMESTAMPTZ, place   -- V5 (RN-02.23)
   stage CHECK (preparacao|confirmada|em_locacao|devolvida|encerrada|cancelada)
-  days, daily_rate_cents, total_cents   -- cópia da diária na criação (RN-02.6)
+  days = blocos de 24h, para cima       -- RN-02.24
+  daily_rate_cents, total_cents         -- cópia da diária na criação (RN-02.6)
   checks JSONB                          -- conferências: cnh, terms, deposit, payment, delivery, return, issues
   expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)
   created_by FK users, created_at, updated_at
-  EXCLUDE USING gist (vehicle_id WITH =, daterange(start_date, end_date) WITH &&)
+  EXCLUDE USING gist (vehicle_id WITH =, tstzrange(start_at, end_at) WITH &&)
     WHERE (stage NOT IN ('encerrada','cancelada'))   -- btree_gist (RN-02.1/02.2)
 
 booking_events (booking_id FK, from_stage, to_stage, user_id NULL = automático, created_at)
@@ -126,7 +128,9 @@ O estado do veículo é calculado na leitura da frota, sem coluna: manutenção 
 
 A expiração roda dentro de cada operação de reserva (mesma conexão ou transação), antes de ler ou gravar. Não há job em segundo plano: uma pré-reserva vencida fica `preparacao` no banco até a próxima chamada, mas nunca é vista assim pela API.
 
-`daterange(start, end)` é semiaberto `[start, end)`: datas adjacentes não se sobrepõem, como no protótipo.
+`tstzrange(start, end)` é semiaberto `[start, end)`: devolver às 10h e retirar às 10h não se sobrepõem (RN-02.25).
+
+A API devolve `start_at` e `end_at` no fuso de Gramado e, por compatibilidade, `start_date` e `end_date` (o dia em Gramado). O fuso fica em `internal/pkg/timezone`, com a base de fusos embutida no binário (a imagem Alpine não tem `tzdata`).
 
 ---
 

@@ -8,6 +8,17 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Reserva com horário
+
+- `V5_bookings_horario`: `start_at` e `end_at` (`TIMESTAMPTZ`) no lugar de `start_date` e `end_date`; bloqueio por `tstzrange` (RN-02.2, RN-02.23). Reservas existentes viram 09:00 de Gramado, sem mudar as diárias. Down testado (volta para datas).
+- `booking.ParseInstant`: RFC 3339, `AAAA-MM-DDTHH:MM` no horário de Gramado ou só a data (09:00, compatibilidade). `Period.Days`: blocos de 24 horas, para cima, mínimo 1 (RN-02.24).
+- API devolve `start_at`/`end_at` no fuso de Gramado e mantém `start_date`/`end_date`; aceita `start_at`/`end_at` (ou as datas antigas) em `POST /bookings` e em `/availability`. `next_booking` da frota também traz a hora, e "reservado" vale até a devolução combinada.
+- Novo `internal/pkg/timezone` (America/Sao_Paulo, `time/tzdata` embutido).
+- Testes: período, diárias, `ParseInstant`, sobreposição por hora, saída no mesmo dia e fuso. Cobertura em 95,1%.
+- Falta: hora real da entrega e da devolução, para a tolerância e a diária extra do atraso (RN-02.19).
+
+---
+
 ## [2026-11-06] — Checklist de devolução e estado do veículo
 
 - `V4_checklist`: tabela `checklist_items` com a lista inicial do fundador (RN-01.6, q56 e q80). Chave em minúsculas sem acento, única e imutável.

@@ -99,9 +99,12 @@ func (h *BookingHandler) Cancel(c *gin.Context) {
 	api.Respond(c, http.StatusOK, b)
 }
 
-// Available godoc: GET /api/availability?start_date=AAAA-MM-DD&end_date=AAAA-MM-DD
+// Available godoc: GET /api/availability?start_at=AAAA-MM-DDTHH:MM&end_at=AAAA-MM-DDTHH:MM
+// (start_date e end_date, só com a data, continuam aceitos e viram 09:00).
 func (h *BookingHandler) Available(c *gin.Context) {
-	vehicles, err := h.svc.Available(c.Request.Context(), c.Query("start_date"), c.Query("end_date"))
+	start := c.DefaultQuery("start_at", c.Query("start_date"))
+	end := c.DefaultQuery("end_at", c.Query("end_date"))
+	vehicles, err := h.svc.Available(c.Request.Context(), start, end)
 	if err != nil {
 		h.fail(c, "availability failed", err)
 		return
