@@ -34,6 +34,12 @@ func (f *fakeService) Events(context.Context, string) ([]transfer.Event, error) 
 func (f *fakeService) Create(_ context.Context, _ transfer.CreateRequest, u string) (transfer.Transfer, error) {
 	return f.out(u)
 }
+func (f *fakeService) Drivers(context.Context, string) ([]transfer.Driver, error) {
+	return []transfer.Driver{{Name: "M"}}, f.err
+}
+func (f *fakeService) Notify(_ context.Context, _, u string, _ transfer.NotifyRequest) (transfer.Transfer, error) {
+	return f.out(u)
+}
 func (f *fakeService) Offer(_ context.Context, _, u string, _ transfer.OfferRequest) (transfer.Transfer, error) {
 	return f.out(u)
 }
@@ -70,7 +76,9 @@ func do(svc transfer.Service, method, path, body string) *httptest.ResponseRecor
 	r.POST("/transfers", h.Create)
 	r.GET("/transfers/:id", h.Get)
 	r.GET("/transfers/:id/events", h.Events)
+	r.GET("/transfers/:id/drivers", h.Drivers)
 	r.POST("/transfers/:id/offer", h.Offer)
+	r.POST("/transfers/:id/notify", h.Notify)
 	r.POST("/transfers/:id/accept", h.Accept)
 	r.POST("/transfers/:id/release", h.Release)
 	r.PATCH("/transfers/:id/paid", h.SetPaid)
@@ -89,7 +97,9 @@ var routes = []struct{ method, path, body string }{
 	{http.MethodPost, "/transfers", `{"client_name":"C"}`},
 	{http.MethodGet, "/transfers/t1", ""},
 	{http.MethodGet, "/transfers/t1/events", ""},
-	{http.MethodPost, "/transfers/t1/offer", `{"offer_cents":100,"minutes":30}`},
+	{http.MethodGet, "/transfers/t1/drivers", ""},
+	{http.MethodPost, "/transfers/t1/offer", `{"offer_cents":100}`},
+	{http.MethodPost, "/transfers/t1/notify", `{"driver_partner_id":"p1"}`},
 	{http.MethodPost, "/transfers/t1/accept", `{"driver_partner_id":"p1"}`},
 	{http.MethodPost, "/transfers/t1/release", ""},
 	{http.MethodPatch, "/transfers/t1/paid", `{"paid":true}`},
@@ -112,7 +122,7 @@ func TestTransferHandler_OK(t *testing.T) {
 	do(svc, http.MethodPatch, "/transfers/t1/paid", `{"paid":true}`)
 	assert.True(t, svc.paid)
 	assert.Equal(t, "u1", svc.userID, "quem fez vem do token")
-	for _, path := range []string{"/transfers", "/transfers/t1/offer", "/transfers/t1/accept", "/transfers/t1/complete", "/transfers/t1/cancel"} {
+	for _, path := range []string{"/transfers", "/transfers/t1/offer", "/transfers/t1/notify", "/transfers/t1/accept", "/transfers/t1/complete", "/transfers/t1/cancel"} {
 		assert.Equal(t, http.StatusBadRequest, do(&fakeService{}, http.MethodPost, path, `{`).Code, path)
 	}
 	assert.Equal(t, http.StatusBadRequest, do(&fakeService{}, http.MethodPatch, "/transfers/t1/paid", `{`).Code)
@@ -132,7 +142,7 @@ func TestTransferHandler_Errors(t *testing.T) {
 		{transfer.ErrReferrerNotFound, http.StatusBadRequest},
 		{transfer.ErrInvalidOffer, http.StatusBadRequest},
 		{transfer.ErrOfferDecreased, http.StatusBadRequest},
-		{transfer.ErrInvalidDeadline, http.StatusBadRequest},
+		{transfer.ErrVehicleNotFound, http.StatusBadRequest},
 		{transfer.ErrDriverNotFound, http.StatusBadRequest},
 		{transfer.ErrInvalidExtraWait, http.StatusBadRequest},
 		{transfer.ErrWrongStage, http.StatusConflict},

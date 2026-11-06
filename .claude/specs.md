@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Despacho do transfer revisto
+
+- Fundador pediu um fluxo mais direto: a central chama os motoristas um a um e só marca quem aceitou. Sem prazo de oferta (RN-02.30 revista).
+- `V14_transfer_despacho`: `transfers.vehicle_id` (carro da corrida); a checagem oferta/prazo sai; histórico antigo em centavos passa a reais.
+- `GET /api/transfers/:id/drivers`: motoristas e proprietários ativos (RN-03.10 revista: o motorista nem sempre é o dono), com WhatsApp, corridas no mesmo dia e carros de que é dono. `POST /notify` registra o chamado. `POST /offer` só define ou aumenta o valor. `POST /accept` aceita o valor final e o carro.
+- Histórico em reais (`FormatReais`): "R$ 300,00 → R$ 350,00", "Pedro · R$ 350,00". A desistência devolve o valor para a próxima chamada.
+- Nova PEN-67: o que o dono recebe quando outro motorista usa o carro dele no transfer.
+
+---
+
 ## [2026-11-06] — Módulo de transfer (fase 1, operado pela central)
 
 - `V13_transfers`: tabelas `transfers` e `transfer_events`; `partner_payouts` passa a aceitar `transfer_id` (ou `booking_id`) e o tipo `motorista` (valor fixo, sem percentual).

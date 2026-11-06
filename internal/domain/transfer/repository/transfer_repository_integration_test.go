@@ -43,44 +43,81 @@ func TestTransferRepository_Integration(t *testing.T) {
 	assert.Equal(t, "America/Sao_Paulo", tr.PickupAt.Location().String())
 	assert.Equal(t, hotelID, *tr.ReferredByPartnerID)
 
-	// Sem oferta, não há aceite; oferta reaberta não diminui (RN-02.22).
-	_, err = repo.Accept(ctx, tr.ID, userID, driverID)
+	// Quem pode dirigir: motoristas e proprietários ativos (o motorista nem sempre é o dono do carro).
+	var ownerID, vehicleID string
+	insert(&ownerID, `INSERT INTO partners (name, is_owner, referral_code, whatsapp) VALUES ('Dono Teste', true, 'OWN234', '5554999990000') RETURNING id`)
+	require.NoError(t, database.QueryRowContext(ctx, `INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents, owner_partner_id)
+		VALUES ('TST1A23', 'Sedã Teste', 'premium', 'Dono Teste', 5, 'automatico', 10000, $1) RETURNING id`, ownerID).Scan(&vehicleID))
+	drivers, err := repo.Drivers(ctx, tr.ID)
+	require.NoError(t, err)
+	require.Len(t, drivers, 2, "motorista ativo e proprietário; indicador e inativo ficam fora")
+	assert.Equal(t, "Motorista Teste", drivers[0].Name, "motoristas primeiro")
+	assert.Equal(t, []string{"motorista", "proprietario"}, drivers[0].Kinds)
+	assert.Equal(t, "Dono Teste", drivers[1].Name)
+	require.Len(t, drivers[1].Vehicles, 1)
+	assert.Equal(t, "Sedã Teste", drivers[1].Vehicles[0].Name)
+	assert.Empty(t, drivers[1].SameDay)
+
+	// Sem valor, não há aceite; o valor só aumenta (RN-02.22).
+	_, err = repo.Accept(ctx, tr.ID, userID, transfer.AcceptRequest{DriverPartnerID: driverID})
 	assert.ErrorIs(t, err, transfer.ErrNoOffer)
-	expires := time.Now().Add(30 * time.Minute)
-	offered, err := repo.Offer(ctx, tr.ID, userID, 20000, expires)
+	offered, err := repo.Offer(ctx, tr.ID, userID, 20000)
 	require.NoError(t, err)
 	assert.Equal(t, int64(20000), *offered.OfferCents)
-	_, err = repo.Offer(ctx, tr.ID, userID, 15000, expires)
+	_, err = repo.Offer(ctx, tr.ID, userID, 15000)
 	assert.ErrorIs(t, err, transfer.ErrOfferDecreased)
-	_, err = repo.Offer(ctx, tr.ID, userID, 25000, expires)
+	_, err = repo.Offer(ctx, tr.ID, userID, 25000)
 	require.NoError(t, err)
 
-	// Só motorista ativo aceita; quem aceita leva o valor da oferta.
-	for _, bad := range []string{otherID, inactiveID, "00000000-0000-0000-0000-000000000000", "nao-e-uuid"} {
-		_, err = repo.Accept(ctx, tr.ID, userID, bad)
+	// Avisos pelo WhatsApp ficam no histórico; só quem pode dirigir.
+	_, err = repo.Notify(ctx, tr.ID, userID, ownerID)
+	require.NoError(t, err)
+	for _, bad := range []string{otherID, "nao-e-uuid"} {
+		_, err = repo.Notify(ctx, tr.ID, userID, bad)
 		assert.ErrorIs(t, err, transfer.ErrDriverNotFound, bad)
 	}
-	accepted, err := repo.Accept(ctx, tr.ID, userID, driverID)
+
+	for _, bad := range []string{otherID, inactiveID, "00000000-0000-0000-0000-000000000000"} {
+		_, err = repo.Accept(ctx, tr.ID, userID, transfer.AcceptRequest{DriverPartnerID: bad})
+		assert.ErrorIs(t, err, transfer.ErrDriverNotFound, bad)
+	}
+	_, err = repo.Accept(ctx, tr.ID, userID, transfer.AcceptRequest{DriverPartnerID: driverID, VehicleID: "00000000-0000-0000-0000-000000000000"})
+	assert.ErrorIs(t, err, transfer.ErrVehicleNotFound)
+
+	// O motorista aceita dirigindo o carro de outro dono.
+	accepted, err := repo.Accept(ctx, tr.ID, userID, transfer.AcceptRequest{DriverPartnerID: driverID, VehicleID: vehicleID})
 	require.NoError(t, err)
 	assert.Equal(t, transfer.StageAssigned, accepted.Stage)
 	assert.Equal(t, "Motorista Teste", *accepted.DriverName)
+	assert.Equal(t, "Sedã Teste", *accepted.VehicleName)
 	assert.Equal(t, int64(25000), *accepted.DriverCents)
-	assert.Nil(t, accepted.OfferCents, "a oferta fecha")
-	_, err = repo.Accept(ctx, tr.ID, userID, driverID)
+	assert.Nil(t, accepted.OfferCents)
+	_, err = repo.Accept(ctx, tr.ID, userID, transfer.AcceptRequest{DriverPartnerID: ownerID})
 	assert.ErrorIs(t, err, transfer.ErrWrongStage, "o segundo aceite não leva")
 
-	// Desistência: volta para aguardando, sem motorista (RN-02.31); depois aceita de novo.
+	// Outra corrida no mesmo dia aparece para o motorista.
+	sameDay, err := repo.Create(ctx, transfer.NewTransfer{ClientName: "Mesmo Dia", PickupAt: pickup.Add(4 * time.Hour), Origin: "A",
+		Destination: "B", Passengers: 1, PriceCents: 10000, CreatedBy: userID})
+	require.NoError(t, err)
+	drivers, err = repo.Drivers(ctx, sameDay.ID)
+	require.NoError(t, err)
+	require.Len(t, drivers[0].SameDay, 1)
+	assert.True(t, pickup.Equal(drivers[0].SameDay[0]))
+
+	// Desistência: volta para aguardando, sem motorista nem carro, com o mesmo valor (RN-02.31).
 	released, err := repo.Release(ctx, tr.ID, userID)
 	require.NoError(t, err)
 	assert.Equal(t, transfer.StageWaiting, released.Stage)
 	assert.Nil(t, released.DriverPartnerID)
+	assert.Nil(t, released.VehicleID)
+	assert.Equal(t, int64(25000), *released.OfferCents)
 	_, err = repo.Release(ctx, tr.ID, userID)
 	assert.ErrorIs(t, err, transfer.ErrWrongStage)
 	_, err = repo.Start(ctx, tr.ID, userID)
 	assert.ErrorIs(t, err, transfer.ErrWrongStage)
-	_, err = repo.Offer(ctx, tr.ID, userID, 25000, expires)
-	require.NoError(t, err)
-	_, err = repo.Accept(ctx, tr.ID, userID, driverID)
+	// Aceite com valor maior informado na hora.
+	higher := int64(25000)
+	_, err = repo.Accept(ctx, tr.ID, userID, transfer.AcceptRequest{DriverPartnerID: driverID, OfferCents: &higher})
 	require.NoError(t, err)
 
 	// Pagamento, início e conclusão; concluir exige pagamento.
@@ -130,10 +167,13 @@ func TestTransferRepository_Integration(t *testing.T) {
 	for _, e := range events {
 		actions = append(actions, e.Action)
 	}
-	assert.Equal(t, []string{"criado", "oferta", "oferta_reaberta", "aceito", "desistiu", "oferta", "aceito",
+	assert.Equal(t, []string{"criado", "valor", "valor_aumentado", "avisado", "aceito", "desistiu", "aceito",
 		"pago", "pagamento_desfeito", "iniciado", "pago", "concluido"}, actions)
 	assert.Equal(t, "Central Teste", *events[0].UserName)
-	assert.Equal(t, "Motorista Teste", events[4].Detail)
+	assert.Equal(t, "R$ 200,00", events[1].Detail)
+	assert.Equal(t, "R$ 200,00 → R$ 250,00", events[2].Detail)
+	assert.Equal(t, "Dono Teste", events[3].Detail)
+	assert.Equal(t, "Motorista Teste · R$ 250,00", events[4].Detail)
 
 	// Cancelamento com multa e voo cancelado; lista; não encontrados.
 	other, err := repo.Create(ctx, transfer.NewTransfer{ClientName: "Outro", PickupAt: pickup.Add(48 * time.Hour), Origin: "A",
@@ -146,7 +186,7 @@ func TestTransferRepository_Integration(t *testing.T) {
 	assert.True(t, cancelled.FlightCancelled)
 	all, err := repo.List(ctx)
 	require.NoError(t, err)
-	require.Len(t, all, 2)
+	require.Len(t, all, 3)
 	assert.Equal(t, other.ID, all[0].ID, "mais recentes primeiro")
 
 	_, err = repo.Create(ctx, transfer.NewTransfer{ClientName: "X", PickupAt: pickup, Origin: "A", Destination: "B",
@@ -159,7 +199,13 @@ func TestTransferRepository_Integration(t *testing.T) {
 		assert.ErrorIs(t, err, transfer.ErrNotFound)
 		_, err = repo.Start(ctx, id, userID)
 		assert.ErrorIs(t, err, transfer.ErrNotFound)
+		_, err = repo.Drivers(ctx, id)
+		assert.ErrorIs(t, err, transfer.ErrNotFound)
 	}
+	_, err = repo.Notify(ctx, other.ID, userID, driverID)
+	assert.ErrorIs(t, err, transfer.ErrWrongStage, "cancelado")
+	_, err = repo.Offer(ctx, other.ID, userID, 1)
+	assert.ErrorIs(t, err, transfer.ErrWrongStage)
 
 	require.NoError(t, database.Close())
 	_, err = repo.List(ctx)

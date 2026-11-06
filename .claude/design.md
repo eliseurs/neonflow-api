@@ -97,8 +97,10 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
 | POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
 | GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
-| POST | `/api/transfers/:id/offer` | admin, central | Abre ou reabre a oferta (`offer_cents`, `minutes`); não diminui. Só em aguardando_motorista |
-| POST | `/api/transfers/:id/accept` | admin, central | Registra o motorista (`driver_partner_id`, ativo e motorista); exige oferta |
+| GET | `/api/transfers/:id/drivers` | admin, central | Quem pode dirigir (motoristas e proprietários ativos), com WhatsApp, corridas no mesmo dia e carros de que é dono |
+| POST | `/api/transfers/:id/offer` | admin, central | Define ou aumenta o valor para o motorista (`offer_cents`); não diminui. Só em aguardando_motorista |
+| POST | `/api/transfers/:id/notify` | admin, central | Registra no histórico que o motorista foi chamado no WhatsApp (`driver_partner_id`) |
+| POST | `/api/transfers/:id/accept` | admin, central | Marca quem aceitou (`driver_partner_id`, `offer_cents` opcional, `vehicle_id` opcional); exige valor |
 | POST | `/api/transfers/:id/release` | admin, central | Motorista desistiu: volta para aguardando, sem penalidade |
 | PATCH | `/api/transfers/:id/paid` | admin, central | `{paid}` marca ou desmarca o pagamento do cliente |
 | POST | `/api/transfers/:id/start`, `/complete` | admin, central | Inicia; conclui (`extra_wait_cents`, exige pagamento) e gera os pagamentos a parceiros |
@@ -139,8 +141,9 @@ transfers (V13)                         -- RN-02.9 a 02.31
   id, client_name, pickup_at, origin, destination, flight, passengers 1..60, notes
   price_cents > 0                       -- sob consulta, combinado pela central
   stage CHECK (aguardando_motorista|com_motorista|em_andamento|concluido|cancelado)
-  offer_cents, offer_expires_at         -- oferta aberta (juntos); fecha no aceite
+    offer_cents                           -- valor para o motorista até alguém aceitar (só aumenta); offer_expires_at sem uso desde a V14
   driver_partner_id FK partners, driver_cents   -- motorista e valor aceito (juntos)
+  vehicle_id FK vehicles NULL           -- V14: carro da corrida; o motorista nem sempre é o dono
   paid_at, extra_wait_cents, cancel_fee_cents, flight_cancelled, referred_by_partner_id FK, created_by FK
 transfer_events (transfer_id FK, action, detail, user_id, created_at)
 

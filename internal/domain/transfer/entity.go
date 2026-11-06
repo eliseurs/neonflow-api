@@ -1,8 +1,9 @@
-// Package transfer é o transfer operado pela central: corrida com preço sob consulta, oferecida aos
-// motoristas parceiros com valor e prazo, aceita pelo primeiro, paga e concluída (RN-02.9 a 02.31).
+// Package transfer é o transfer operado pela central: corrida com preço sob consulta; a central define o
+// valor para o motorista, chama os motoristas um a um pelo WhatsApp e marca quem aceitou (RN-02.9 a 02.31).
 package transfer
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -21,8 +22,6 @@ const (
 	DateTimeLayout = "2006-01-02T15:04"
 	// FreeCancelWindow: cancelamento grátis até 24 horas antes; depois, 50% do valor (RN-02.10).
 	FreeCancelWindow = 24 * time.Hour
-	// MaxOfferMinutes limita o prazo de uma oferta a 7 dias.
-	MaxOfferMinutes = 7 * 24 * 60
 )
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -38,14 +37,16 @@ type Transfer struct {
 	Notes       string    `json:"notes"`
 	PriceCents  int64     `json:"price_cents"`
 	Stage       string    `json:"stage"`
-	// Oferta aberta aos motoristas: valor e fim do prazo (RN-02.17, RN-02.30). Nulos = sem oferta.
-	OfferCents     *int64     `json:"offer_cents"`
-	OfferExpiresAt *time.Time `json:"offer_expires_at"`
-	// Motorista que aceitou e o valor da oferta aceita (RN-03.9).
-	DriverPartnerID *string    `json:"driver_partner_id"`
-	DriverName      *string    `json:"driver_name"`
-	DriverCents     *int64     `json:"driver_cents"`
-	PaidAt          *time.Time `json:"paid_at"`
+	// Valor para o motorista enquanto ninguém aceitou (RN-02.22: só aumenta). Nulo = ainda não definido.
+	OfferCents *int64 `json:"offer_cents"`
+	// Motorista que aceitou e o valor aceito (RN-03.14). Nem sempre é o dono do carro.
+	DriverPartnerID *string `json:"driver_partner_id"`
+	DriverName      *string `json:"driver_name"`
+	DriverCents     *int64  `json:"driver_cents"`
+	// Carro usado na corrida, quando registrado (RN-03.10 revista).
+	VehicleID   *string    `json:"vehicle_id"`
+	VehicleName *string    `json:"vehicle_name"`
+	PaidAt      *time.Time `json:"paid_at"`
 	// Espera no aeroporto além dos 60 minutos inclusos, informada na conclusão; vai para o motorista (RN-02.16).
 	ExtraWaitCents      int64     `json:"extra_wait_cents"`
 	CancelFeeCents      int64     `json:"cancel_fee_cents"`
@@ -124,28 +125,84 @@ func (r CreateRequest) Validate(userID string) (NewTransfer, error) {
 	return n, nil
 }
 
-// OfferRequest abre ou reabre a oferta aos motoristas.
+// OfferRequest define ou aumenta o valor para o motorista (RN-02.22).
 type OfferRequest struct {
 	OfferCents int64 `json:"offer_cents"`
-	Minutes    int   `json:"minutes"`
 }
 
-// Validate: valor positivo e que não diminui ao reabrir (RN-02.22); prazo de 1 minuto a 7 dias (RN-02.30).
-func (r OfferRequest) Validate(current *int64) error {
+// ValidateOffer: valor positivo e que não diminui (RN-02.22).
+func ValidateOffer(cents int64, current *int64) error {
 	switch {
-	case r.OfferCents <= 0:
+	case cents <= 0:
 		return ErrInvalidOffer
-	case current != nil && r.OfferCents < *current:
+	case current != nil && cents < *current:
 		return ErrOfferDecreased
-	case r.Minutes < 1 || r.Minutes > MaxOfferMinutes:
-		return ErrInvalidDeadline
 	}
 	return nil
 }
 
-// AcceptRequest registra o motorista que aceitou primeiro (RN-02.17).
+// NotifyRequest registra que a central chamou um motorista pelo WhatsApp.
+type NotifyRequest struct {
+	DriverPartnerID string `json:"driver_partner_id"`
+}
+
+// AcceptRequest marca o motorista que aceitou (RN-02.17). OfferCents, se vier, vale como o valor final
+// (não menor que o atual); VehicleID é o carro da corrida, opcional.
 type AcceptRequest struct {
 	DriverPartnerID string `json:"driver_partner_id"`
+	OfferCents      *int64 `json:"offer_cents"`
+	VehicleID       string `json:"vehicle_id"`
+}
+
+// Validate normaliza e confere o formato; motorista e carro são conferidos no banco.
+func (r AcceptRequest) Validate(current *int64) (AcceptRequest, error) {
+	r.DriverPartnerID = strings.TrimSpace(r.DriverPartnerID)
+	r.VehicleID = strings.TrimSpace(r.VehicleID)
+	switch {
+	case !uuidPattern.MatchString(r.DriverPartnerID):
+		return r, ErrDriverNotFound
+	case r.VehicleID != "" && !uuidPattern.MatchString(r.VehicleID):
+		return r, ErrVehicleNotFound
+	case r.OfferCents == nil && current == nil:
+		return r, ErrNoOffer
+	case r.OfferCents != nil:
+		if err := ValidateOffer(*r.OfferCents, current); err != nil {
+			return r, err
+		}
+	}
+	return r, nil
+}
+
+// Driver é quem pode fazer a corrida: parceiro ativo motorista ou proprietário (o dono pode dirigir o
+// próprio carro, mas nem sempre quem dirige é o dono).
+type Driver struct {
+	PartnerID string   `json:"partner_id"`
+	Name      string   `json:"name"`
+	WhatsApp  string   `json:"whatsapp"`
+	Kinds     []string `json:"kinds"`
+	// Outras corridas do motorista no mesmo dia (horário de Gramado), para não atribuir duas juntas.
+	SameDay []time.Time `json:"same_day"`
+	// Carros de que ele é dono, para sugerir o carro da corrida.
+	Vehicles []DriverVehicle `json:"vehicles"`
+}
+
+type DriverVehicle struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Plate string `json:"plate"`
+}
+
+// FormatReais escreve centavos como "R$ 1.350,00" para o histórico.
+func FormatReais(cents int64) string {
+	sign := ""
+	if cents < 0 {
+		sign, cents = "-", -cents
+	}
+	whole := fmt.Sprintf("%d", cents/100)
+	for i := len(whole) - 3; i > 0; i -= 3 {
+		whole = whole[:i] + "." + whole[i:]
+	}
+	return fmt.Sprintf("%sR$ %s,%02d", sign, whole, cents%100)
 }
 
 // CompleteRequest conclui a corrida com a espera extra, em reais, combinada com o cliente (RN-02.16).
