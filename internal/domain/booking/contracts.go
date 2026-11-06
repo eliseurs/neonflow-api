@@ -17,6 +17,8 @@ type Repository interface {
 	Available(ctx context.Context, p Period) ([]fleet.Vehicle, error)
 	// ReturnChecklist devolve as chaves dos itens ativos do checklist de devolução, em ordem (RN-01.6).
 	ReturnChecklist(ctx context.Context) ([]string, error)
+	// ReturnPhotos conta as fotos da devolução da reserva (item "fotos" do checklist, RN-01.6).
+	ReturnPhotos(ctx context.Context, id string) (int, error)
 }
 
 type Service interface {

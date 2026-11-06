@@ -17,6 +17,7 @@ Serviço `neonflow-api`, ligado a `eliseurs/neonflow-api` (`main`): https://neon
 | `JWT_SECRET` | `openssl rand -base64 48` — nunca commitar |
 | `JWT_EXPIRY_HOURS` | `12` |
 | `ALLOWED_ORIGINS` | `https://neonflow-app-hml.up.railway.app` |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | bucket de arquivos (ADR-0014). Em hml: bucket `neonflow-arquivos` do Railway (06/11/2026), com as credenciais de `railway bucket credentials --bucket neonflow-arquivos --json` gravadas por `railway variables --set-from-stdin`, sem passar pelo terminal. Para o Cloudflare R2, trocar as cinco. Sem elas, o envio de fotos responde 503 |
 
 4. **Settings → Networking → Generate Domain**.
 5. Deploy. O build usa o `Dockerfile`, e o container roda `./migrate up && ./api` ao iniciar.

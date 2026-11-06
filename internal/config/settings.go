@@ -28,6 +28,22 @@ type Configs struct {
 	JWTSecret      string
 	JWTExpiryHours int
 	AllowedOrigins []string
+	Storage        Storage
+}
+
+// Storage é o armazenamento de arquivos compatível com S3 (bucket do Railway hoje, Cloudflare R2 depois;
+// ADR-0014). Sem as cinco variáveis, o envio de fotos responde que o armazenamento não está configurado.
+type Storage struct {
+	Endpoint  string
+	Region    string
+	Bucket    string
+	AccessKey string
+	SecretKey string
+}
+
+// Enabled diz se todas as variáveis do armazenamento estão definidas.
+func (s Storage) Enabled() bool {
+	return s.Endpoint != "" && s.Bucket != "" && s.AccessKey != "" && s.SecretKey != ""
 }
 
 // Load lê as variáveis de ambiente. Os defaults servem ao ambiente local
@@ -40,6 +56,13 @@ func Load() Configs {
 		JWTSecret:      getEnv("JWT_SECRET", devJWTSecret),
 		JWTExpiryHours: getEnvInt("JWT_EXPIRY_HOURS", 12),
 		AllowedOrigins: splitList(getEnv("ALLOWED_ORIGINS", "http://localhost:5173")),
+		Storage: Storage{
+			Endpoint:  getEnv("STORAGE_ENDPOINT", ""),
+			Region:    getEnv("STORAGE_REGION", "auto"),
+			Bucket:    getEnv("STORAGE_BUCKET", ""),
+			AccessKey: getEnv("STORAGE_ACCESS_KEY_ID", ""),
+			SecretKey: getEnv("STORAGE_SECRET_ACCESS_KEY", ""),
+		},
 	}
 }
 

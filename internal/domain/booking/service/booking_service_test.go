@@ -26,10 +26,16 @@ type fakeRepo struct {
 	items      []string
 	itemsErr   error
 	record     booking.Record
+	photos     int
+	photosErr  error
 }
 
 func (f *fakeRepo) ReturnChecklist(context.Context) ([]string, error) {
 	return f.items, f.itemsErr
+}
+
+func (f *fakeRepo) ReturnPhotos(context.Context, string) (int, error) {
+	return f.photos, f.photosErr
 }
 
 func (f *fakeRepo) List(context.Context, string) ([]booking.Booking, error) {
@@ -274,6 +280,19 @@ func TestBookingService_ReturnChecklist(t *testing.T) {
 	b, err := svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, booking.StageEncerrada, b.Stage)
+
+	// q80 "Fotos obrigatórias": o item fotos exige ao menos uma foto da devolução.
+	repo.items = append(repo.items, booking.PhotosCheck)
+	_, err = svc.SetChecks(ctx, "b1", map[string]bool{booking.PhotosCheck: true})
+	assert.ErrorIs(t, err, booking.ErrPhotosRequired)
+	repo.photosErr = errors.New("db")
+	_, err = svc.SetChecks(ctx, "b1", map[string]bool{booking.PhotosCheck: true})
+	assert.Error(t, err)
+	repo.photos, repo.photosErr = 2, nil
+	_, err = svc.SetChecks(ctx, "b1", map[string]bool{booking.PhotosCheck: true})
+	require.NoError(t, err)
+	_, err = svc.SetChecks(ctx, "b1", map[string]bool{booking.PhotosCheck: false})
+	require.NoError(t, err, "desmarcar não exige foto")
 
 	repo.itemsErr = errors.New("db")
 	_, err = svc.SetChecks(ctx, "b1", map[string]bool{"pneus": true})

@@ -120,6 +120,7 @@ const (
 		JOIN bookings b ON b.vehicle_id = other.vehicle_id
 		WHERE b.id = $1 AND other.id <> b.id AND other.stage IN ('em_locacao', 'devolvida')
 	`
+	queryReturnPhotos    = `SELECT count(*) FROM photos WHERE owner_type = 'reserva' AND owner_id = $1 AND stage = 'devolucao'`
 	queryReturnChecklist = `
 		SELECT key FROM checklist_items
 		WHERE active
@@ -344,6 +345,14 @@ func (r *BookingRepository) Available(ctx context.Context, p booking.Period) ([]
 		return nil, fmt.Errorf("available vehicles: %w", err)
 	}
 	return vehicles, nil
+}
+
+func (r *BookingRepository) ReturnPhotos(ctx context.Context, id string) (int, error) {
+	var n int
+	if err := r.db.QueryRowContext(ctx, queryReturnPhotos, id).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count return photos: %w", err)
+	}
+	return n, nil
 }
 
 func (r *BookingRepository) ReturnChecklist(ctx context.Context) ([]string, error) {
