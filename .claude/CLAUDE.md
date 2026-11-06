@@ -67,7 +67,7 @@ railway logs --service neonflow-api
 
 ### Estado atual
 
-Auth (`/api/auth/*`), usuários (`/api/users`), parceiros (`/api/partners`, RN-07), repasses e comissões (`/api/payouts`, RN-03.12, RN-03.13), indicadores (`/api/dashboard`), frota (`/api/vehicles`) e reservas (`/api/bookings`, `/api/availability`), operados pela central. Reserva com bloqueio atômico no banco, etapas com conferências e histórico. Plano em `docs/plano-reserva-persistente.md`; a reserva tem data e hora (`start_at`, `end_at`) e diária em blocos de 24 horas (RN-02.23, RN-02.24, fuso de Gramado); a central registra a hora real da entrega e da devolução, e o atraso é cobrado por minuto, a diária ÷ 1440 (RN-02.19). Em aberto: dados do cliente (PEN-48) e tenant (PEN-49).
+Auth (`/api/auth/*`), usuários (`/api/users`), parceiros (`/api/partners`, RN-07), repasses e comissões (`/api/payouts`, RN-03.12, RN-03.13), indicadores (`/api/dashboard`), transfer (`/api/transfers`), frota (`/api/vehicles`) e reservas (`/api/bookings`, `/api/availability`), operados pela central. Reserva com bloqueio atômico no banco, etapas com conferências e histórico. Plano em `docs/plano-reserva-persistente.md`; a reserva tem data e hora (`start_at`, `end_at`) e diária em blocos de 24 horas (RN-02.23, RN-02.24, fuso de Gramado); a central registra a hora real da entrega e da devolução, e o atraso é cobrado por minuto, a diária ÷ 1440 (RN-02.19). Em aberto: dados do cliente (PEN-48) e tenant (PEN-49).
 
 ### Ambientes
 

@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Módulo de transfer (fase 1, operado pela central)
+
+- `V13_transfers`: tabelas `transfers` e `transfer_events`; `partner_payouts` passa a aceitar `transfer_id` (ou `booking_id`) e o tipo `motorista` (valor fixo, sem percentual).
+- Domínio `transfer`: criar (preço sob consulta), abrir ou reabrir oferta com valor e prazo (não diminui), registrar o aceite do primeiro motorista (ativo, com papel de motorista), desistência sem penalidade, marcar pagamento, iniciar, concluir com a espera extra (exige pagamento) e cancelar com multa de 50% dentro de 24h, zero se o voo foi cancelado. Cada ação trava a corrida e grava o histórico.
+- Concluir gera, na mesma transação, o pagamento do motorista (oferta + espera) e a comissão do indicador sobre o preço (RN-03.14). `payout` lista as duas origens (`booking_id` ou `transfer_id`, `description` = carro ou "origem → destino").
+- Regras: RN-02.9, 02.10, 02.16, 02.17, 02.22, 02.27, 02.30 e 02.31 com onde são aplicadas; RN-03.14 nova; PEN-07.
+
+---
+
 ## [2026-11-06] — Indicadores da tela inicial (PEN-11, q97, q98)
 
 - `V12_bookings_paid_at`: `bookings.paid_at`. Marcar a conferência `payment` grava a data (só na primeira vez); desmarcar apaga. Reservas já pagas recebem a data da confirmação (aproximação). Vem na resposta da reserva.

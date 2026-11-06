@@ -62,7 +62,7 @@ func TestPayoutRepository_Integration(t *testing.T) {
 	byKind := func(list []payout.Payout, bookingID string) map[string]payout.Payout {
 		out := map[string]payout.Payout{}
 		for _, p := range list {
-			if p.BookingID == bookingID {
+			if p.BookingID != nil && *p.BookingID == bookingID {
 				out[p.Kind] = p
 			}
 		}
@@ -85,7 +85,7 @@ func TestPayoutRepository_Integration(t *testing.T) {
 	assert.Equal(t, int64(3000), *c.AmountCents)
 	o := got[payout.KindOwnerShare]
 	assert.Equal(t, "Dono Teste", o.PartnerName)
-	assert.Equal(t, "Sedã Parceiro", o.VehicleName)
+	assert.Equal(t, "Sedã Parceiro", o.Description)
 	assert.Equal(t, int64(34000), o.BaseCents, "repasse sobre diárias + atraso + km")
 	assert.Equal(t, 70.0, *o.Percent)
 	assert.Equal(t, int64(23800), *o.AmountCents)
@@ -113,7 +113,7 @@ func TestPayoutRepository_Integration(t *testing.T) {
 	pending, err := repo.List(ctx, payout.Filter{Kind: payout.KindCommission, Status: payout.StatusPending, PartnerID: newID})
 	require.NoError(t, err)
 	require.Len(t, pending, 1)
-	assert.Equal(t, b3.ID, pending[0].BookingID)
+	assert.Equal(t, b3.ID, *pending[0].BookingID)
 	assert.Nil(t, pending[0].AmountCents)
 	_, err = repo.MarkPaid(ctx, pending[0].ID, userID)
 	assert.ErrorIs(t, err, payout.ErrPercentUndefined)
