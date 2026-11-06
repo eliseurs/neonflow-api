@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"image"
+	stdjpeg "image/jpeg"
 	"io"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"neonflow-api/internal/domain/photo"
+	"neonflow-api/internal/infra/storage"
 )
 
 var jpeg = []byte{0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, 'J', 'F', 'I', 'F', 0}
@@ -29,6 +32,9 @@ type fakeRepo struct {
 	deleted    photo.Photo
 	deleteErr  error
 	coverErr   error
+	fleet      []photo.Car
+	vphoto     photo.Photo
+	vphotoErr  error
 }
 
 func (f *fakeRepo) BookingStage(context.Context, string) (string, error) { return f.stage, f.stageErr }
@@ -45,6 +51,10 @@ func (f *fakeRepo) List(context.Context, string, string, string) ([]photo.Photo,
 func (f *fakeRepo) Delete(context.Context, string) (photo.Photo, error) {
 	return f.deleted, f.deleteErr
 }
+func (f *fakeRepo) PublicFleet(context.Context) ([]photo.Car, error) { return f.fleet, nil }
+func (f *fakeRepo) VehiclePhoto(context.Context, string) (photo.Photo, error) {
+	return f.vphoto, f.vphotoErr
+}
 func (f *fakeRepo) SetCover(_ context.Context, id string) (photo.Photo, error) {
 	return photo.Photo{ID: id, Key: "k"}, f.coverErr
 }
@@ -54,6 +64,8 @@ type fakeStore struct {
 	deleted []string
 	putErr  error
 	urlErr  error
+	getErr  error
+	gets    []string
 }
 
 func (s *fakeStore) Put(_ context.Context, key string, body io.Reader, _ int64, _ string) error {
@@ -63,6 +75,17 @@ func (s *fakeStore) Put(_ context.Context, key string, body io.Reader, _ int64, 
 	b, _ := io.ReadAll(body)
 	s.put[key] = b
 	return nil
+}
+func (s *fakeStore) Get(_ context.Context, key string) ([]byte, error) {
+	s.gets = append(s.gets, key)
+	if s.getErr != nil {
+		return nil, s.getErr
+	}
+	b, ok := s.put[key]
+	if !ok {
+		return nil, storage.ErrNotFound
+	}
+	return b, nil
 }
 func (s *fakeStore) URL(_ context.Context, key string, ttl time.Duration) (string, error) {
 	return "https://bucket.test/" + key + "?ttl=" + ttl.String(), s.urlErr
@@ -157,7 +180,12 @@ func TestListDeleteCover(t *testing.T) {
 	assert.Error(t, err)
 
 	require.NoError(t, svc.Delete(ctx, "p1"))
-	assert.Equal(t, []string{"veiculos/v1/a.jpg"}, store.deleted)
+	assert.Equal(t, []string{"veiculos/v1/a.jpg"}, store.deleted, "foto de reserva não tem versões")
+	repo.deleted.OwnerType = photo.OwnerVehicle
+	store.deleted = nil
+	require.NoError(t, svc.Delete(ctx, "p1"))
+	assert.Equal(t, []string{"veiculos/v1/a-w640.jpg", "veiculos/v1/a-w1280.jpg", "veiculos/v1/a-w1920.jpg", "veiculos/v1/a.jpg"}, store.deleted)
+	repo.deleted.OwnerType = ""
 	repo.deleteErr = photo.ErrNotFound
 	assert.ErrorIs(t, svc.Delete(ctx, "x"), photo.ErrNotFound)
 
@@ -168,3 +196,50 @@ func TestListDeleteCover(t *testing.T) {
 	_, err = svc.SetCover(ctx, "x")
 	assert.ErrorIs(t, err, photo.ErrNotFound)
 }
+
+func TestVariant(t *testing.T) {
+	ctx := context.Background()
+	img := image.NewRGBA(image.Rect(0, 0, 2000, 1000))
+	var orig bytes.Buffer
+	require.NoError(t, jpegEncode(&orig, img))
+	repo := &fakeRepo{vphoto: photo.Photo{ID: "p1", Key: "veiculos/v1/a.webp"}, fleet: []photo.Car{{ID: "v1"}}}
+	store := &fakeStore{put: map[string][]byte{"veiculos/v1/a.webp": orig.Bytes()}}
+	svc := NewPhotoService(repo, store)
+
+	cars, err := svc.PublicFleet(ctx)
+	require.NoError(t, err)
+	assert.Len(t, cars, 1)
+
+	// Primeira vez: gera da original e guarda.
+	out, err := svc.Variant(ctx, "p1", 640)
+	require.NoError(t, err)
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(out))
+	require.NoError(t, err)
+	assert.Equal(t, 640, cfg.Width)
+	assert.Equal(t, out, store.put["veiculos/v1/a-w640.jpg"])
+	// Depois: só lê a versão guardada.
+	store.gets = nil
+	again, err := svc.Variant(ctx, "p1", 640)
+	require.NoError(t, err)
+	assert.Equal(t, out, again)
+	assert.Equal(t, []string{"veiculos/v1/a-w640.jpg"}, store.gets)
+
+	_, err = svc.Variant(ctx, "p1", 1000)
+	assert.ErrorIs(t, err, photo.ErrInvalidWidth)
+	repo.vphotoErr = photo.ErrNotFound
+	_, err = svc.Variant(ctx, "p9", 640)
+	assert.ErrorIs(t, err, photo.ErrNotFound)
+	repo.vphotoErr = nil
+	store.getErr = errors.New("bucket")
+	_, err = svc.Variant(ctx, "p1", 1280)
+	assert.Error(t, err)
+	store.getErr = nil
+	delete(store.put, "veiculos/v1/a.webp")
+	_, err = svc.Variant(ctx, "p1", 1920)
+	assert.ErrorIs(t, err, storage.ErrNotFound, "sem a original")
+	store.put["veiculos/v1/a.webp"] = []byte("corrompida")
+	_, err = svc.Variant(ctx, "p1", 1920)
+	assert.ErrorIs(t, err, photo.ErrInvalidType)
+}
+
+func jpegEncode(w io.Writer, img image.Image) error { return stdjpeg.Encode(w, img, nil) }

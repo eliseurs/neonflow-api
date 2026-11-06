@@ -40,6 +40,8 @@ func TestDisabled(t *testing.T) {
 	_, err := d.URL(ctx, "k", time.Minute)
 	assert.ErrorIs(t, err, ErrNotConfigured)
 	assert.ErrorIs(t, d.Delete(ctx, "k"), ErrNotConfigured)
+	_, err = d.Get(ctx, "k")
+	assert.ErrorIs(t, err, ErrNotConfigured)
 }
 
 func TestCleanKey(t *testing.T) {
@@ -54,6 +56,19 @@ func TestBucketPutDelete(t *testing.T) {
 		got = append(got, r.Method+" "+r.URL.Path)
 		if strings.Contains(r.URL.Path, "erro") {
 			w.WriteHeader(http.StatusForbidden) // 403 não é repetido pelo cliente
+			return
+		}
+		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "falta") {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code><Message>x</Message></Error>`))
+			return
+		}
+		if r.Method == http.MethodGet {
+			w.Header().Set("Last-Modified", "Mon, 2 Jan 2006 15:04:05 GMT")
+			w.Header().Set("ETag", `"abc"`)
+			w.Header().Set("Content-Length", "3")
+			_, _ = w.Write([]byte("img"))
 			return
 		}
 		if r.Method == http.MethodPut {
@@ -72,6 +87,13 @@ func TestBucketPutDelete(t *testing.T) {
 	require.NoError(t, s.Delete(ctx, "veiculos/v1/a.jpg"))
 	assert.Contains(t, got, "PUT /neonflow-teste/veiculos/v1/a.jpg")
 	assert.Contains(t, got, "DELETE /neonflow-teste/veiculos/v1/a.jpg")
+	data, err := s.Get(ctx, "veiculos/v1/a.jpg")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("img"), data)
+	_, err = s.Get(ctx, "veiculos/v1/falta.jpg")
+	assert.ErrorIs(t, err, ErrNotFound)
+	_, err = s.Get(ctx, "erro.jpg")
+	assert.Error(t, err)
 	assert.Error(t, s.Put(ctx, "erro.jpg", strings.NewReader("img"), 3, "image/jpeg"))
 	assert.Error(t, s.Delete(ctx, "erro.jpg"))
 }

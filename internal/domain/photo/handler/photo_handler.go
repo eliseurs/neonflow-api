@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -54,6 +55,32 @@ func (h *PhotoHandler) Cover(c *gin.Context) {
 	h.respond(c, http.StatusOK, p, err, "cover photo failed")
 }
 
+// PublicFleet godoc: GET /api/public/fleet (sem login)
+func (h *PhotoHandler) PublicFleet(c *gin.Context) {
+	cars, err := h.svc.PublicFleet(c.Request.Context())
+	if err == nil {
+		c.Header("Cache-Control", "public, max-age=300")
+	}
+	h.respond(c, http.StatusOK, cars, err, "public fleet failed")
+}
+
+// Variant godoc: GET /api/public/photos/:id/w/:width (sem login; só foto de veículo)
+func (h *PhotoHandler) Variant(c *gin.Context) {
+	width, err := strconv.Atoi(c.Param("width"))
+	if err != nil {
+		api.RespondError(c, http.StatusBadRequest, photo.ErrInvalidWidth.Error())
+		return
+	}
+	data, err := h.svc.Variant(c.Request.Context(), c.Param("id"), width)
+	if err != nil {
+		h.respond(c, 0, nil, err, "photo variant failed")
+		return
+	}
+	// Endereço fixo por foto e largura, e a foto nunca muda: cache de um ano no navegador e na CDN.
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	c.Data(http.StatusOK, "image/jpeg", data)
+}
+
 func (h *PhotoHandler) upload(c *gin.Context, ownerType, stage string) {
 	// Limita o corpo antes de ler: a foto mais a folga do multipart.
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, photo.MaxSize+1<<20)
@@ -83,7 +110,8 @@ func (h *PhotoHandler) respond(c *gin.Context, status int, data any, err error, 
 		api.Respond(c, status, data)
 	case errors.Is(err, photo.ErrNotFound), errors.Is(err, photo.ErrOwnerNotFound):
 		api.RespondError(c, http.StatusNotFound, err.Error())
-	case errors.Is(err, photo.ErrInvalidType), errors.Is(err, photo.ErrEmpty), errors.Is(err, photo.ErrInvalidStage):
+	case errors.Is(err, photo.ErrInvalidType), errors.Is(err, photo.ErrEmpty), errors.Is(err, photo.ErrInvalidStage),
+		errors.Is(err, photo.ErrInvalidWidth):
 		api.RespondError(c, http.StatusBadRequest, err.Error())
 	case errors.Is(err, photo.ErrTooLarge):
 		api.RespondError(c, http.StatusRequestEntityTooLarge, err.Error())

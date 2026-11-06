@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -108,7 +109,48 @@ func (s *PhotoService) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	if p.OwnerType == photo.OwnerVehicle {
+		for _, w := range photo.VariantWidths {
+			_ = s.store.Delete(ctx, photo.VariantKey(p.Key, w)) // versões que nunca foram geradas não existem
+		}
+	}
 	return s.store.Delete(ctx, p.Key)
+}
+
+// PublicFleet: os carros do site, com o id da foto de capa.
+func (s *PhotoService) PublicFleet(ctx context.Context) ([]photo.Car, error) {
+	return s.repo.PublicFleet(ctx)
+}
+
+// Variant entrega a versão da foto do veículo na largura pedida. Na primeira vez gera a partir da
+// original e guarda no bucket; depois só lê.
+func (s *PhotoService) Variant(ctx context.Context, id string, width int) ([]byte, error) {
+	if !photo.VariantAllowed(width) {
+		return nil, photo.ErrInvalidWidth
+	}
+	p, err := s.repo.VehiclePhoto(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	key := photo.VariantKey(p.Key, width)
+	data, err := s.store.Get(ctx, key)
+	if err == nil {
+		return data, nil
+	}
+	if !errors.Is(err, storage.ErrNotFound) {
+		return nil, err
+	}
+	original, err := s.store.Get(ctx, p.Key)
+	if err != nil {
+		return nil, err
+	}
+	out, err := photo.Resize(original, width)
+	if err != nil {
+		return nil, err
+	}
+	// Guardar é otimização: se falhar, a próxima visita gera de novo.
+	_ = s.store.Put(ctx, key, bytes.NewReader(out), int64(len(out)), "image/jpeg")
+	return out, nil
 }
 
 func (s *PhotoService) SetCover(ctx context.Context, id string) (photo.Photo, error) {

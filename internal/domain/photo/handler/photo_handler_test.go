@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,12 @@ func (f *fakeService) List(_ context.Context, owner, _, stage string) ([]photo.P
 	return []photo.Photo{{ID: "p1"}}, f.err
 }
 func (f *fakeService) Delete(context.Context, string) error { return f.err }
+func (f *fakeService) PublicFleet(context.Context) ([]photo.Car, error) {
+	return []photo.Car{{ID: "v1", Name: "Jetta"}}, f.err
+}
+func (f *fakeService) Variant(_ context.Context, _ string, width int) ([]byte, error) {
+	return []byte("jpeg-" + strconv.Itoa(width)), f.err
+}
 func (f *fakeService) SetCover(context.Context, string) (photo.Photo, error) {
 	return photo.Photo{ID: "p1"}, f.err
 }
@@ -55,6 +62,8 @@ func router(svc photo.Service) *gin.Engine {
 	r.POST("/bookings/:id/photos", h.UploadBooking)
 	r.DELETE("/photos/:id", h.Delete)
 	r.POST("/photos/:id/cover", h.Cover)
+	r.GET("/public/fleet", h.PublicFleet)
+	r.GET("/public/photos/:id/w/:width", h.Variant)
 	return r
 }
 
@@ -105,6 +114,17 @@ func TestPhotoHandler(t *testing.T) {
 	assert.Equal(t, photo.StageDelivery, svc.stage)
 	assert.Equal(t, http.StatusOK, do(r, http.MethodDelete, "/photos/p1", nil, "").Code)
 	assert.Equal(t, http.StatusOK, do(r, http.MethodPost, "/photos/p1/cover", nil, "").Code)
+
+	w = do(r, http.MethodGet, "/public/fleet", nil, "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "public, max-age=300", w.Header().Get("Cache-Control"))
+	assert.Contains(t, w.Body.String(), `"name":"Jetta"`)
+	w = do(r, http.MethodGet, "/public/photos/p1/w/640", nil, "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "image/jpeg", w.Header().Get("Content-Type"))
+	assert.Equal(t, "public, max-age=31536000, immutable", w.Header().Get("Cache-Control"))
+	assert.Equal(t, "jpeg-640", w.Body.String())
+	assert.Equal(t, http.StatusBadRequest, do(r, http.MethodGet, "/public/photos/p1/w/grande", nil, "").Code)
 }
 
 func TestPhotoHandler_Errors(t *testing.T) {
@@ -117,6 +137,7 @@ func TestPhotoHandler_Errors(t *testing.T) {
 		{photo.ErrInvalidType, http.StatusBadRequest},
 		{photo.ErrEmpty, http.StatusBadRequest},
 		{photo.ErrInvalidStage, http.StatusBadRequest},
+		{photo.ErrInvalidWidth, http.StatusBadRequest},
 		{photo.ErrTooLarge, http.StatusRequestEntityTooLarge},
 		{photo.ErrWrongStage, http.StatusConflict},
 		{storage.ErrNotConfigured, http.StatusServiceUnavailable},
@@ -129,5 +150,9 @@ func TestPhotoHandler_Errors(t *testing.T) {
 		assert.Equal(t, tc.status, do(r, http.MethodGet, "/bookings/b1/photos", nil, "").Code, tc.err.Error())
 		assert.Equal(t, tc.status, do(r, http.MethodDelete, "/photos/p1", nil, "").Code, tc.err.Error())
 		assert.Equal(t, tc.status, do(r, http.MethodPost, "/photos/p1/cover", nil, "").Code, tc.err.Error())
+		assert.Equal(t, tc.status, do(r, http.MethodGet, "/public/photos/p1/w/640", nil, "").Code, tc.err.Error())
+		w := do(r, http.MethodGet, "/public/fleet", nil, "")
+		assert.Equal(t, tc.status, w.Code, tc.err.Error())
+		assert.Empty(t, w.Header().Get("Cache-Control"), "erro não vai para o cache")
 	}
 }

@@ -22,4 +22,9 @@ func Register(app *api.App, store photo.Store) {
 	g.POST("/bookings/:id/photos", h.UploadBooking)
 	g.DELETE("/photos/:id", h.Delete)
 	g.POST("/photos/:id/cover", h.Cover)
+
+	// Site público: só a frota e as fotos de veículo, nunca as da reserva.
+	public := app.API(api.Routes{})
+	public.GET("/public/fleet", h.PublicFleet)
+	public.GET("/public/photos/:id/w/:width", h.Variant)
 }

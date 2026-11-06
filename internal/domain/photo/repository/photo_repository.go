@@ -28,8 +28,18 @@ const (
 		SELECT ` + photoColumns + ` FROM photos
 		WHERE owner_type = $1 AND owner_id = $2 AND ($3 = '' OR stage = $3)
 		ORDER BY stage, position, created_at`
-	queryDelete = `DELETE FROM photos WHERE id = $1 RETURNING ` + photoColumns
-	queryFind   = `SELECT ` + photoColumns + ` FROM photos WHERE id = $1`
+	queryDelete       = `DELETE FROM photos WHERE id = $1 RETURNING ` + photoColumns
+	queryFind         = `SELECT ` + photoColumns + ` FROM photos WHERE id = $1`
+	queryVehiclePhoto = `SELECT ` + photoColumns + ` FROM photos WHERE id = $1 AND owner_type = 'veiculo'`
+	// Site público: carros fora de manutenção, Economy antes de Premium, com a primeira foto (capa).
+	queryPublicFleet = `
+		SELECT v.id, v.name, v.category, v.seats, v.gear, p.id
+		FROM vehicles v
+		LEFT JOIN LATERAL (
+			SELECT id FROM photos WHERE owner_type = 'veiculo' AND owner_id = v.id ORDER BY position, created_at LIMIT 1
+		) p ON true
+		WHERE NOT v.in_maintenance
+		ORDER BY v.category = 'premium', v.name`
 	// Capa: a escolhida vai para a posição 0 e as demais descem uma.
 	queryCover = `
 		UPDATE photos o SET position = CASE WHEN o.id = $1 THEN 0 ELSE o.position + 1 END
@@ -113,6 +123,36 @@ func (r *PhotoRepository) SetCover(ctx context.Context, id string) (photo.Photo,
 	}
 	p, err := scan(r.db.QueryRowContext(ctx, queryFind, id))
 	return p, mapError(err, photo.ErrNotFound, "find photo")
+}
+
+func (r *PhotoRepository) PublicFleet(ctx context.Context) ([]photo.Car, error) {
+	rows, err := r.db.QueryContext(ctx, queryPublicFleet)
+	if err != nil {
+		return nil, fmt.Errorf("public fleet: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	cars := []photo.Car{}
+	for rows.Next() {
+		var c photo.Car
+		var photoID sql.NullString
+		if err := rows.Scan(&c.ID, &c.Name, &c.Category, &c.Seats, &c.Gear, &photoID); err != nil {
+			return nil, fmt.Errorf("scan car: %w", err)
+		}
+		if photoID.Valid {
+			c.PhotoID = &photoID.String
+		}
+		cars = append(cars, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("public fleet: %w", err)
+	}
+	return cars, nil
+}
+
+func (r *PhotoRepository) VehiclePhoto(ctx context.Context, id string) (photo.Photo, error) {
+	p, err := scan(r.db.QueryRowContext(ctx, queryVehiclePhoto, id))
+	return p, mapError(err, photo.ErrNotFound, "vehicle photo")
 }
 
 func scan(s scanner) (photo.Photo, error) {

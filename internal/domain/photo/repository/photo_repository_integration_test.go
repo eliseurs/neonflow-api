@@ -89,6 +89,28 @@ func TestPhotoRepository_Integration(t *testing.T) {
 	_, err = repo.Create(ctx, photo.NewPhoto{OwnerType: photo.OwnerVehicle, OwnerID: vehicleID, Stage: photo.StageReturn, Key: "x.jpg", ContentType: "image/jpeg", SizeBytes: 1})
 	assert.Error(t, err)
 
+	// Site público: só veículo fora de manutenção, com a capa; foto de reserva não é pública.
+	var maintID string
+	require.NoError(t, database.QueryRowContext(ctx, `INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents, in_maintenance)
+		VALUES ('TST9Z99', 'Na Oficina', 'premium', 'Neon Flow', 5, 'automatico', 10000, true) RETURNING id`).Scan(&maintID))
+	var premiumID string
+	require.NoError(t, database.QueryRowContext(ctx, `INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents)
+		VALUES ('TST8Y88', 'Alfa Premium', 'premium', 'Neon Flow', 5, 'automatico', 30000) RETURNING id`).Scan(&premiumID))
+	fleet, err := repo.PublicFleet(ctx)
+	require.NoError(t, err)
+	require.Len(t, fleet, 2)
+	assert.Equal(t, vehicleID, fleet[0].ID, "Economy antes de Premium")
+	assert.Equal(t, bb.ID, *fleet[0].PhotoID, "capa")
+	assert.Equal(t, premiumID, fleet[1].ID)
+	assert.Nil(t, fleet[1].PhotoID)
+	vp, err := repo.VehiclePhoto(ctx, bb.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "veiculos/v/b.jpg", vp.Key)
+	_, err = repo.VehiclePhoto(ctx, ret[0].ID)
+	assert.ErrorIs(t, err, photo.ErrNotFound, "foto de reserva não é pública")
+	_, err = repo.VehiclePhoto(ctx, "nao-e-uuid")
+	assert.ErrorIs(t, err, photo.ErrNotFound)
+
 	deleted, err := repo.Delete(ctx, a.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "veiculos/v/a.jpg", deleted.Key)
@@ -105,6 +127,8 @@ func TestPhotoRepository_Integration(t *testing.T) {
 	_, err = repo.BookingStage(ctx, b.ID)
 	assert.Error(t, err)
 	_, err = repo.VehicleExists(ctx, vehicleID)
+	assert.Error(t, err)
+	_, err = repo.PublicFleet(ctx)
 	assert.Error(t, err)
 	_, err = bookings.ReturnPhotos(ctx, b.ID)
 	assert.Error(t, err)
