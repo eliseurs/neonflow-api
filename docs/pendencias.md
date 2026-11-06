@@ -1,6 +1,6 @@
 # Registro de pendências
 
-**66 pendências, 15 bloqueantes** (28 resolvidas, 10 parciais, 28 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
+**66 pendências, 15 bloqueantes** (29 resolvidas, 10 parciais, 27 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
@@ -36,7 +36,7 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 | PEN-59 | Decidir se o preço fica público no site (tabela trecho × veículo) ou sob consulta | Alta | Fundador | resolvida em 03/11/2026 ([ADR-0011](adr/ADR-0011-escopo-de-lancamento-e-canais.md)): aluguel com preço visível, transfer sob consulta | Linha visual LuxuryBus, 03/11/2026 |
 | PEN-61 | Definir as categorias de veículo e se a frota comporta posicionamento premium | Alta | Fundador | resolvida em 03/11/2026 ([RN-01.4](../.claude/business-rules/01-frota.md)): Economy e Premium | Linha visual LuxuryBus, 03/11/2026 |
 | PEN-65 | Hotéis parceiros: acordos existentes, autorização de uso de nome e foto, papel (indicador ou ponto de embarque) | Alta | Fundador | parcial: app nasce com template predefinido, área de parceiros depois ([ADR-0011](adr/ADR-0011-escopo-de-lancamento-e-canais.md), 03/11/2026); faltam acordos e autorização de uso de nome e foto | Linha visual LuxuryBus, 03/11/2026 |
-| PEN-66 | Informar o número de WhatsApp da central (canal de reserva do ADR-0011) | Alta | Fundador / operação | aberta: a landing lê `VITE_WHATSAPP_NUMBER` no `neonflow-app`; sem ele, os botões de WhatsApp ficam desativados | Landing, 05/11/2026 |
+| PEN-66 | Informar o número de WhatsApp da central (canal de reserva do ADR-0011) | Alta | Fundador / operação | resolvida em 05/11/2026: +55 51 99719-2854, configurado em `VITE_WHATSAPP_NUMBER` do `neonflow-app` (Railway `hml`); a landing já abre o WhatsApp da central | Landing, 05/11/2026 |
 
 ## Produto e escopo
 

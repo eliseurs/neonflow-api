@@ -8,6 +8,13 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-05] — WhatsApp da central (PEN-66)
+
+- PEN-66 resolvida: número da central +55 51 99719-2854, definido em `VITE_WHATSAPP_NUMBER` do `neonflow-app` no Railway `hml`. O botão flutuante, o rodapé e o formulário da landing já abrem o WhatsApp.
+- `docs/pendencias.md`: totais atualizados (29 resolvidas, 10 parciais, 27 abertas).
+
+---
+
 ## [2026-11-05] — Landing no neonflow-app
 
 - Landing pública em `/` no `neonflow-app`, só com regras aprovadas (ADR-0011, ADR-0013, RN-02, RN-06), sem preço, foto ou hotel parceiro.
