@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/fleet"
@@ -9,10 +10,11 @@ import (
 
 type BookingService struct {
 	repo booking.Repository
+	now  func() time.Time
 }
 
 func NewBookingService(repo booking.Repository) *BookingService {
-	return &BookingService{repo: repo}
+	return &BookingService{repo: repo, now: time.Now}
 }
 
 func (s *BookingService) List(ctx context.Context, vehicleID string) ([]booking.Booking, error) {
@@ -52,7 +54,8 @@ func (s *BookingService) SetChecks(ctx context.Context, id string, checks map[st
 }
 
 // Advance leva a reserva à etapa seguinte quando as conferências da atual estão feitas (RN-02.4).
-func (s *BookingService) Advance(ctx context.Context, id, userID string) (booking.Booking, error) {
+// Na entrega e na devolução, grava a hora real (RN-02.19); na devolução, calcula a diária extra do atraso.
+func (s *BookingService) Advance(ctx context.Context, id, userID string, req booking.AdvanceRequest) (booking.Booking, error) {
 	b, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return booking.Booking{}, err
@@ -65,7 +68,39 @@ func (s *BookingService) Advance(ctx context.Context, id, userID string) (bookin
 	if err != nil {
 		return booking.Booking{}, err
 	}
-	return s.repo.Transition(ctx, id, b.Stage, next, userID)
+	rec, err := s.record(b, next, req.At)
+	if err != nil {
+		return booking.Booking{}, err
+	}
+	return s.repo.Transition(ctx, id, b.Stage, next, userID, rec)
+}
+
+// record monta o que a transição grava: a hora real na entrega e na devolução e, na devolução, o atraso.
+func (s *BookingService) record(b booking.Booking, next, at string) (booking.Record, error) {
+	if next != booking.StageEmLocacao && next != booking.StageDevolvida {
+		return booking.Record{}, nil
+	}
+	now := s.now()
+	when := now
+	if at != "" {
+		t, err := booking.ParseInstant(at)
+		if err != nil {
+			return booking.Record{}, err
+		}
+		if t.After(now.Add(booking.ClockSkew)) {
+			return booking.Record{}, booking.ErrFutureTime
+		}
+		when = t
+	}
+	if next == booking.StageEmLocacao {
+		return booking.Record{DeliveredAt: &when}, nil
+	}
+	if b.DeliveredAt != nil && !when.After(*b.DeliveredAt) {
+		return booking.Record{}, booking.ErrReturnBeforeDelivery
+	}
+	days := booking.LateDays(b.EndAt, when)
+	cents := int64(days) * b.DailyRateCents
+	return booking.Record{ReturnedAt: &when, ExtraDays: &days, ExtraCents: &cents}, nil
 }
 
 // extraChecks: na etapa "devolvida", o checklist de devolução configurado pela central entra
@@ -86,7 +121,7 @@ func (s *BookingService) Cancel(ctx context.Context, id, userID string) (booking
 	if !booking.Cancelable(b.Stage) {
 		return booking.Booking{}, booking.ErrNotCancelable
 	}
-	return s.repo.Transition(ctx, id, b.Stage, booking.StageCancelada, userID)
+	return s.repo.Transition(ctx, id, b.Stage, booking.StageCancelada, userID, booking.Record{})
 }
 
 // Available lista os veículos fora de manutenção e sem reserva ativa no período.

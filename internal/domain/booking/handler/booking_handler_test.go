@@ -41,9 +41,9 @@ func (f fakeService) SetChecks(_ context.Context, id string, checks map[string]b
 	return booking.Booking{ID: id, Checks: checks}, f.err
 }
 
-func (f fakeService) Advance(_ context.Context, id, userID string) (booking.Booking, error) {
+func (f fakeService) Advance(_ context.Context, id, userID string, req booking.AdvanceRequest) (booking.Booking, error) {
 	*f.user = userID
-	return booking.Booking{ID: id, Stage: "confirmada"}, f.err
+	return booking.Booking{ID: id, Stage: "confirmada", Place: req.At}, f.err
 }
 
 func (f fakeService) Cancel(_ context.Context, id, userID string) (booking.Booking, error) {
@@ -94,6 +94,7 @@ func TestBookingHandler_OK(t *testing.T) {
 		{http.MethodPost, "/bookings", `{"client_name":"Cliente"}`, http.StatusCreated, `"client_name":"Cliente"`},
 		{http.MethodPatch, "/bookings/b1/checks", `{"cnh":true}`, http.StatusOK, `"cnh":true`},
 		{http.MethodPost, "/bookings/b1/advance", "", http.StatusOK, `"stage":"confirmada"`},
+		{http.MethodPost, "/bookings/b1/advance", `{"at":"2026-12-12T10:30"}`, http.StatusOK, `"place":"2026-12-12T10:30"`},
 		{http.MethodPost, "/bookings/b1/cancel", "", http.StatusOK, `"stage":"cancelada"`},
 	}
 	for _, tc := range cases {
@@ -114,6 +115,7 @@ func TestBookingHandler_BadBody(t *testing.T) {
 	svc := fakeService{user: &user}
 	assert.Equal(t, http.StatusBadRequest, do(svc, http.MethodPost, "/bookings", `{`).Code)
 	assert.Equal(t, http.StatusBadRequest, do(svc, http.MethodPatch, "/bookings/b1/checks", `{"cnh":"sim"}`).Code)
+	assert.Equal(t, http.StatusBadRequest, do(svc, http.MethodPost, "/bookings/b1/advance", `{"at":10}`).Code)
 }
 
 func TestBookingHandler_Errors(t *testing.T) {
@@ -135,6 +137,9 @@ func TestBookingHandler_Errors(t *testing.T) {
 		{booking.ErrNotCancelable, http.StatusConflict},
 		{booking.ErrStageChanged, http.StatusConflict},
 		{booking.ErrAwaitingChecklist, http.StatusConflict},
+		{booking.ErrVehicleInUse, http.StatusConflict},
+		{booking.ErrFutureTime, http.StatusBadRequest},
+		{booking.ErrReturnBeforeDelivery, http.StatusBadRequest},
 		{errors.New("db"), http.StatusInternalServerError},
 	}
 	paths := []struct{ method, path, body string }{

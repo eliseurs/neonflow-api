@@ -78,14 +78,14 @@ func TestBookingRepository_CreateAndLifecycle(t *testing.T) {
 	_, err = repo.SetChecks(ctx, b.ID, booking.StageConfirmada, map[string]bool{"delivery": true})
 	assert.ErrorIs(t, err, booking.ErrStageChanged)
 
-	moved, err := repo.Transition(ctx, b.ID, booking.StagePreparacao, booking.StageConfirmada, userID)
+	moved, err := repo.Transition(ctx, b.ID, booking.StagePreparacao, booking.StageConfirmada, userID, booking.Record{})
 	require.NoError(t, err)
 	assert.Equal(t, booking.StageConfirmada, moved.Stage)
-	_, err = repo.Transition(ctx, b.ID, booking.StagePreparacao, booking.StageConfirmada, userID)
+	_, err = repo.Transition(ctx, b.ID, booking.StagePreparacao, booking.StageConfirmada, userID, booking.Record{})
 	assert.ErrorIs(t, err, booking.ErrStageChanged, "segundo clique não avança de novo")
 
 	// Cancelar libera o período (RN-02.5).
-	_, err = repo.Transition(ctx, adj.ID, booking.StagePreparacao, booking.StageCancelada, userID)
+	_, err = repo.Transition(ctx, adj.ID, booking.StagePreparacao, booking.StageCancelada, userID, booking.Record{})
 	require.NoError(t, err)
 	_, err = repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Terceiro",
 		Period: period(t, "2026-12-13", "2026-12-14"), CreatedBy: userID})
@@ -137,7 +137,7 @@ func TestBookingRepository_Errors(t *testing.T) {
 	assert.ErrorIs(t, err, booking.ErrBookingNotFound)
 	_, err = repo.Events(ctx, "nao-e-uuid")
 	assert.ErrorIs(t, err, booking.ErrBookingNotFound)
-	_, err = repo.Transition(ctx, "00000000-0000-0000-0000-000000000000", "preparacao", "confirmada", userID)
+	_, err = repo.Transition(ctx, "00000000-0000-0000-0000-000000000000", "preparacao", "confirmada", userID, booking.Record{})
 	assert.ErrorIs(t, err, booking.ErrStageChanged)
 
 	require.NoError(t, database.Close())
@@ -251,22 +251,30 @@ func TestBookingRepository_ReturnChecklist(t *testing.T) {
 		{booking.StageConfirmada, booking.StageEmLocacao},
 		{booking.StageEmLocacao, booking.StageDevolvida},
 	} {
-		_, err := repo.Transition(ctx, first.ID, step[0], step[1], userID)
+		_, err := repo.Transition(ctx, first.ID, step[0], step[1], userID, booking.Record{})
 		require.NoError(t, err)
 	}
-	_, err = repo.Transition(ctx, second.ID, booking.StagePreparacao, booking.StageConfirmada, userID)
+	_, err = repo.Transition(ctx, second.ID, booking.StagePreparacao, booking.StageConfirmada, userID, booking.Record{})
+	require.NoError(t, err)
+
+	// O carro ainda com o primeiro cliente não sai para o segundo.
+	_, err = database.ExecContext(ctx, `UPDATE bookings SET stage = 'em_locacao' WHERE id = $1`, first.ID)
+	require.NoError(t, err)
+	_, err = repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID, booking.Record{})
+	assert.ErrorIs(t, err, booking.ErrVehicleInUse)
+	_, err = database.ExecContext(ctx, `UPDATE bookings SET stage = 'devolvida' WHERE id = $1`, first.ID)
 	require.NoError(t, err)
 
 	// RN-01.6 e RN-02.25: o carro só sai de novo com o checklist da devolução anterior aprovado.
-	_, err = repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID)
+	_, err = repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID, booking.Record{})
 	assert.ErrorIs(t, err, booking.ErrAwaitingChecklist)
 	still, err := repo.FindByID(ctx, second.ID)
 	require.NoError(t, err)
 	assert.Equal(t, booking.StageConfirmada, still.Stage)
 
-	_, err = repo.Transition(ctx, first.ID, booking.StageDevolvida, booking.StageEncerrada, userID)
+	_, err = repo.Transition(ctx, first.ID, booking.StageDevolvida, booking.StageEncerrada, userID, booking.Record{})
 	require.NoError(t, err)
-	out, err := repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID)
+	out, err := repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID, booking.Record{})
 	require.NoError(t, err)
 	assert.Equal(t, booking.StageEmLocacao, out.Stage)
 
@@ -313,4 +321,43 @@ func TestBookingRepository_Hours(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list, 2)
 	assert.Equal(t, first.ID, list[0].ID, "ordem pela retirada")
+}
+
+func TestBookingRepository_ActualTimes(t *testing.T) {
+	database := testutil.MigratedDB(t, "../../../../sql/migrations")
+	repo := NewBookingRepository(database)
+	ctx := context.Background()
+	userID, vehicleID := seed(t, database)
+
+	b, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Cliente",
+		Period: period(t, "2026-12-10T10:00", "2026-12-12T10:00"), CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Nil(t, b.DeliveredAt)
+	assert.Zero(t, b.ExtraDays)
+
+	_, err = repo.Transition(ctx, b.ID, booking.StagePreparacao, booking.StageConfirmada, userID, booking.Record{})
+	require.NoError(t, err)
+
+	delivered := period(t, "2026-12-10T10:20", "2026-12-12T15:00")
+	out, err := repo.Transition(ctx, b.ID, booking.StageConfirmada, booking.StageEmLocacao, userID,
+		booking.Record{DeliveredAt: &delivered.Start})
+	require.NoError(t, err)
+	require.NotNil(t, out.DeliveredAt)
+	assert.True(t, delivered.Start.Equal(*out.DeliveredAt))
+	assert.Equal(t, "America/Sao_Paulo", out.DeliveredAt.Location().String())
+	assert.Nil(t, out.ReturnedAt)
+
+	days, cents := 1, int64(10000)
+	back, err := repo.Transition(ctx, b.ID, booking.StageEmLocacao, booking.StageDevolvida, userID,
+		booking.Record{ReturnedAt: &delivered.End, ExtraDays: &days, ExtraCents: &cents})
+	require.NoError(t, err)
+	assert.True(t, delivered.Start.Equal(*back.DeliveredAt), "campos nulos mantêm o valor")
+	assert.True(t, delivered.End.Equal(*back.ReturnedAt))
+	assert.Equal(t, 1, back.ExtraDays)
+	assert.Equal(t, int64(10000), back.ExtraCents)
+	assert.Equal(t, int64(20000), back.TotalCents, "o total combinado não muda")
+
+	// O banco recusa devolução antes da entrega.
+	_, err = database.ExecContext(ctx, `UPDATE bookings SET returned_at = delivered_at - interval '1 hour' WHERE id = $1`, b.ID)
+	assert.Error(t, err)
 }

@@ -72,13 +72,13 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/bookings/:id/events` | admin, central | Histórico de etapas |
 | POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_at`, `end_at`, `place`): bloqueia o intervalo. Data e hora `AAAA-MM-DDTHH:MM` no horário de Gramado ou RFC 3339 |
 | PATCH | `/api/bookings/:id/checks` | admin, central | Marca conferências da etapa atual (`{"cnh": true}`) |
-| POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas |
+| POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas. Corpo opcional `{"at": "AAAA-MM-DDTHH:MM"}`: hora real da entrega ou da devolução (padrão: agora). Na devolução, calcula o atraso (RN-02.19) |
 | POST | `/api/bookings/:id/cancel` | admin, central | Cancela (preparação ou confirmada) e libera o período |
 | GET | `/api/checklist-items` | admin, central | Itens do checklist de devolução, em ordem (ativos e inativos) |
 | POST | `/api/checklist-items` | admin, central | Novo item (`label`, `position`, `active`); a chave sai do nome e não muda |
 | PUT | `/api/checklist-items/:id` | admin, central | Troca `label`, `position` e `active` (ausente mantém) |
 
-Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva).
+Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
 Em "devolvida", as conferências exigidas são `issues` mais as chaves dos itens ativos do checklist. Uma reserva não vai para "em locação" enquanto o mesmo veículo tiver outra em "devolvida" (RN-01.6).
 
@@ -111,6 +111,8 @@ bookings
   days = blocos de 24h, para cima       -- RN-02.24
   daily_rate_cents, total_cents         -- cópia da diária na criação (RN-02.6)
   checks JSONB                          -- conferências: cnh, terms, deposit, payment, delivery, return, issues
+  delivered_at, returned_at TIMESTAMPTZ  -- hora real da entrega e da devolução (V6)
+  extra_days, extra_cents               -- atraso na devolução (RN-02.19); total_cents não muda
   expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)
   created_by FK users, created_at, updated_at
   EXCLUDE USING gist (vehicle_id WITH =, tstzrange(start_at, end_at) WITH &&)

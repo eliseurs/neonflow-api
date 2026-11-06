@@ -79,9 +79,16 @@ func (h *BookingHandler) SetChecks(c *gin.Context) {
 	api.Respond(c, http.StatusOK, b)
 }
 
-// Advance godoc: POST /api/bookings/:id/advance
+// Advance godoc: POST /api/bookings/:id/advance  {"at": "AAAA-MM-DDTHH:MM"} (opcional: hora real da entrega ou da devolução)
 func (h *BookingHandler) Advance(c *gin.Context) {
-	b, err := h.svc.Advance(c.Request.Context(), c.Param("id"), c.GetString("userID"))
+	var req booking.AdvanceRequest
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			api.RespondError(c, http.StatusBadRequest, "corpo da requisição inválido")
+			return
+		}
+	}
+	b, err := h.svc.Advance(c.Request.Context(), c.Param("id"), c.GetString("userID"), req)
 	if err != nil {
 		h.fail(c, "advance booking failed", err)
 		return
@@ -128,12 +135,13 @@ func statusFor(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, booking.ErrVehicleRequired), errors.Is(err, booking.ErrClientNameRequired),
 		errors.Is(err, booking.ErrInvalidDate), errors.Is(err, booking.ErrInvalidPeriod),
-		errors.Is(err, booking.ErrInvalidCheck):
+		errors.Is(err, booking.ErrInvalidCheck), errors.Is(err, booking.ErrFutureTime),
+		errors.Is(err, booking.ErrReturnBeforeDelivery):
 		return http.StatusBadRequest
 	case errors.Is(err, booking.ErrVehicleInMaintenance), errors.Is(err, booking.ErrPeriodUnavailable),
 		errors.Is(err, booking.ErrChecksPending), errors.Is(err, booking.ErrStageFinal),
 		errors.Is(err, booking.ErrNotCancelable), errors.Is(err, booking.ErrStageChanged),
-		errors.Is(err, booking.ErrAwaitingChecklist):
+		errors.Is(err, booking.ErrAwaitingChecklist), errors.Is(err, booking.ErrVehicleInUse):
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError

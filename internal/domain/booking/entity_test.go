@@ -64,6 +64,25 @@ func TestPeriodDays(t *testing.T) {
 	}
 }
 
+func TestLateDays(t *testing.T) {
+	end := time.Date(2026, 12, 12, 10, 0, 0, 0, timezone.Location)
+	// RN-02.19: até 1 hora de tolerância; passado isso, 1 diária por bloco de 24 horas iniciado.
+	cases := []struct {
+		returned time.Duration
+		days     int
+	}{
+		{-3 * time.Hour, 0},
+		{0, 0},
+		{time.Hour, 0},
+		{time.Hour + time.Minute, 1},
+		{25 * time.Hour, 1},
+		{25*time.Hour + time.Minute, 2},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.days, LateDays(end, end.Add(tc.returned)), tc.returned.String())
+	}
+}
+
 func TestCreateRequestValidate(t *testing.T) {
 	withTime, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartAt: "2026-12-10T14:00", EndAt: "2026-12-12T15:00",
 		StartDate: "2026-01-01", EndDate: "2026-01-02"}.Validate("u1")

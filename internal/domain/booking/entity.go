@@ -25,6 +25,10 @@ const (
 	LegacyHour = 9
 	// DayLength é a diária: blocos de 24 horas a partir da retirada (RN-02.24).
 	DayLength = 24 * time.Hour
+	// LateTolerance é a tolerância na devolução: até 1 hora depois do combinado não cobra (RN-02.19).
+	LateTolerance = time.Hour
+	// ClockSkew é a folga aceita para uma hora informada no futuro (relógios desencontrados).
+	ClockSkew = 5 * time.Minute
 
 	// PaymentWindow é o prazo para pagar a pré-reserva; depois ela é cancelada (RN-02.8, RN-02.11, ADR-0012).
 	PaymentWindow = 24 * time.Hour
@@ -60,10 +64,16 @@ type Booking struct {
 	DailyRateCents int64           `json:"daily_rate_cents"`
 	TotalCents     int64           `json:"total_cents"`
 	Checks         map[string]bool `json:"checks"`
-	ExpiresAt      time.Time       `json:"expires_at"`
-	CreatedBy      *string         `json:"created_by"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	// Hora real da entrega e da devolução, informadas pela central (RN-02.19).
+	DeliveredAt *time.Time `json:"delivered_at"`
+	ReturnedAt  *time.Time `json:"returned_at"`
+	// Diárias extras do atraso na devolução e o valor delas, pela diária da reserva (RN-02.19).
+	ExtraDays  int       `json:"extra_days"`
+	ExtraCents int64     `json:"extra_cents"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	CreatedBy  *string   `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Event é uma transição de etapa. UserID nulo indica transição automática (expiração).
@@ -84,6 +94,35 @@ type CreateRequest struct {
 	StartDate  string `json:"start_date"`
 	EndDate    string `json:"end_date"`
 	Place      string `json:"place"`
+}
+
+// AdvanceRequest é o corpo opcional do avanço de etapa. At é a hora real da entrega
+// (confirmada → em locação) ou da devolução (em locação → devolvida); vazia, vale agora.
+type AdvanceRequest struct {
+	At string `json:"at"`
+}
+
+// Record é o que a transição grava além da etapa. Campos nulos não mudam a reserva.
+type Record struct {
+	DeliveredAt *time.Time
+	ReturnedAt  *time.Time
+	ExtraDays   *int
+	ExtraCents  *int64
+}
+
+// LateDays conta as diárias extras de uma devolução: nada até 1 hora depois do combinado;
+// passado isso, 1 diária por bloco de 24 horas iniciado depois da tolerância (RN-02.19, RN-02.24).
+// Devolver antes do combinado não gera desconto.
+func LateDays(plannedEnd, returned time.Time) int {
+	late := returned.Sub(plannedEnd) - LateTolerance
+	if late <= 0 {
+		return 0
+	}
+	days := int(late / DayLength)
+	if late%DayLength > 0 {
+		days++
+	}
+	return days
 }
 
 // NewBooking é o que o repository grava. Diária e total vêm do veículo dentro da transação (RN-02.6).
