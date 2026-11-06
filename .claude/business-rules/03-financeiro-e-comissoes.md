@@ -7,7 +7,7 @@
 | RN-03.1 | Caução é contabilizada separadamente da receita de locação ou transfer | proposta | — (o protótipo não contabiliza caução) | PEN-03, PEN-30 |
 | RN-03.2 | Identificar a origem de uma solicitação não cria direito a comissão. Comissão exige acordo válido, base de cálculo, elegibilidade, conclusão, pagamento e tratamento de estorno | proposta | — | PEN-08, PEN-46 |
 | RN-03.3 | Cancelar uma reserva paga preserva o recebimento e registra a obrigação de estorno | proposta | — (o protótipo remove a reserva do financeiro) | PEN-06, PEN-30 |
-| RN-03.4 | O percentual de comissão é **configurável** pela operação, por categoria do que foi indicado. Nenhum percentual fica fixo no código | aprovada (03/11/2026, fundador) | — | PEN-08 |
+| RN-03.4 | O percentual de comissão é **configurável** pela operação. Nenhum percentual fica fixo no código. Em 06/11/2026 o fundador definiu que o percentual é **por parceiro** (antes: por categoria do que foi indicado) | aprovada (03/11/2026; por parceiro em 06/11/2026) | `partners.commission_bp` (RN-07.6); cálculo na fase 2 | PEN-08 |
 | RN-03.5 | Manutenção e combustível do veículo parceiro são custos do **dono do veículo** | aprovada (03/11/2026, fundador) | — | PEN-09 |
 | RN-03.6 | O pagamento do cliente é repassado ao dono do veículo **ao final do aluguel** | aprovada (03/11/2026, fundador) | — | PEN-09 |
 | RN-03.7 | **O Neon Flow recebe o pagamento do cliente**, fica com um **percentual configurável** e repassa o restante ao dono do veículo. O exemplo do fundador é 30%, ainda em discussão | aprovada (04/11/2026, fundador; quem recebe primeiro confirmado em 05/11/2026, q51); percentual não definido | — | PEN-09 |

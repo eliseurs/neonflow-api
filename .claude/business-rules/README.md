@@ -24,6 +24,7 @@
 | `04-dados-e-integracoes.md` | Dados entre verticais e integrações com o Nexus |
 | `05-autorizacao.md` | Autenticação e papéis |
 | `06-condutor-caucao-e-seguro.md` | Requisitos do condutor, caução e seguro no aluguel sem motorista |
+| `07-parceiros.md` | Cadastro de parceiros (proprietário, motorista, indicador) e indicação por link ou QR |
 
 ---
 

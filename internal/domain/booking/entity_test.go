@@ -97,6 +97,12 @@ func TestCreateRequestValidate(t *testing.T) {
 	assert.Equal(t, KmPlanLivre, plan.KmPlan)
 	_, err = CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12", KmPlan: "ilimitado"}.Validate("u1")
 	assert.ErrorIs(t, err, ErrInvalidKmPlan)
+	_, err = CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12", ReferredByPartnerID: "abc"}.Validate("u1")
+	assert.ErrorIs(t, err, ErrReferrerNotFound)
+	ref, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12",
+		ReferredByPartnerID: " 00000000-0000-0000-0000-000000000001 "}.Validate("u1")
+	require.NoError(t, err)
+	assert.Equal(t, "00000000-0000-0000-0000-000000000001", ref.ReferredBy)
 
 	withTime, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartAt: "2026-12-10T14:00", EndAt: "2026-12-12T15:00",
 		StartDate: "2026-01-01", EndDate: "2026-01-02"}.Validate("u1")

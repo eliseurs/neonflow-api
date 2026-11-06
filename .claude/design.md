@@ -35,7 +35,8 @@ internal/
     fleet/                  # veículos (RN-01)
     booking/                # reservas, disponibilidade e histórico (RN-02)
         checklist/              # itens do checklist de devolução, configuráveis (RN-01.6)
-    user/                   # gestão de usuários pelo admin e troca da própria senha (RN-05.7)
+        user/                   # gestão de usuários pelo admin e troca da própria senha (RN-05.7)
+    partner/                # parceiros: proprietário, motorista, indicador; código de indicação (RN-07)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -83,6 +84,11 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PUT | `/api/users/:id` | admin | Troca `name`, `role` e `active` (ausente mantém). 409 se o admin tentar se desativar ou deixar de ser admin |
 | POST | `/api/users/:id/password` | admin | Redefine a senha de outro usuário (`password`) |
 | POST | `/api/auth/password` | todos | Troca a própria senha (`current_password`, `new_password`) |
+| GET | `/api/partners?kind=` | admin, central | Parceiros (ativos primeiro); `kind` = proprietario, motorista ou indicador |
+| GET | `/api/partners/:id` | admin, central | Um parceiro |
+| GET | `/api/partners/code/:code` | admin, central | Parceiro pelo código de indicação |
+| POST | `/api/partners` | admin, central | Cria (`name`, `kinds[]`, contato, percentuais 0–100 ou nulo); gera `referral_code` |
+| PUT | `/api/partners/:id` | admin, central | Substitui os dados (o código não muda); `active` ausente mantém |
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
@@ -111,7 +117,16 @@ vehicles
   id, plate (UNIQUE, sem hífen), name, owner TEXT
   category CHECK (economy|premium), gear CHECK (manual|automatico), seats INT
     daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
-  deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; limite e valor do km juntos
+    deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; limite e valor do km juntos
+  owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
+
+partners (V9)                           -- RN-07
+  id, name, is_owner, is_driver, is_referrer BOOL (ao menos um)
+  whatsapp (dígitos), email, city, notes TEXT
+  referral_code TEXT UNIQUE ^[A-Z0-9]{6,12}$ (não muda)
+  commission_bp, owner_share_bp, driver_share_bp INT 0..10000 NULL   -- pontos-base, por parceiro
+  active BOOL, created_at, updated_at
+
 
 bookings
   id, vehicle_id FK, client_name, start_at TIMESTAMPTZ, end_at TIMESTAMPTZ, place   -- V5 (RN-02.23)
@@ -122,7 +137,9 @@ bookings
     delivered_at, returned_at TIMESTAMPTZ  -- hora real da entrega e da devolução (V6)
   deposit_cents, km_limit_per_day, extra_km_cents   -- cópia do veículo na criação (V7); limite nulo = km livre
   delivered_km, returned_km, excess_km, excess_km_cents   -- odômetro e km excedente (RN-02.18)
-  extra_days, extra_cents               -- atraso na devolução (RN-02.19); total_cents não muda
+    extra_days, extra_cents               -- atraso na devolução (RN-02.19); total_cents não muda
+  referred_by_partner_id FK partners NULL   -- V9: quem indicou (RN-07.5)
+
   expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)
   created_by FK users, created_at, updated_at
   EXCLUDE USING gist (vehicle_id WITH =, tstzrange(start_at, end_at) WITH &&)

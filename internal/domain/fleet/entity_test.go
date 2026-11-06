@@ -51,6 +51,7 @@ func TestVehicleRequestValidate(t *testing.T) {
 		{"km excedente", func(r *VehicleRequest) { r.KmLimitPerDay, r.ExtraKmCents = ptr(200), ptr(int64(-1)) }, ErrInvalidKmPlan},
 		{"km sem valor", func(r *VehicleRequest) { r.KmLimitPerDay = ptr(200) }, ErrKmPlanIncomplete},
 		{"valor sem km", func(r *VehicleRequest) { r.ExtraKmCents = ptr(int64(150)) }, ErrKmPlanIncomplete},
+		{"proprietário", func(r *VehicleRequest) { r.OwnerPartnerID = ptr("nao-e-uuid") }, ErrOwnerPartnerNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

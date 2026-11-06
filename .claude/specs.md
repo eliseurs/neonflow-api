@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Cadastro de parceiros e indicação (fase 1)
+
+- `V9_partners`: tabela `partners` (papéis proprietário, motorista e indicador, ao menos um; dados básicos; `referral_code` único; percentuais por parceiro em pontos-base, nulos = a definir), `vehicles.owner_partner_id` e `bookings.referred_by_partner_id` (FKs opcionais).
+- Domínio `partner`: `GET/POST /api/partners`, `GET/PUT /api/partners/:id`, `GET /api/partners/code/:code` (admin e central). Código de 6 caracteres sem ambíguos, sorteado de novo em colisão (até 5 tentativas). Repasse ao proprietário só vale para proprietário, percentual do motorista só para motorista.
+- Frota e reservas aceitam `owner_partner_id` e `referred_by_partner_id`; parceiro inexistente responde 400.
+- Regras: novo `07-parceiros.md` (RN-07.1 a RN-07.7); RN-03.4 passa a ser por parceiro; PEN-16 e PEN-17 parciais. Comissão e repasse calculados ficam para a fase 2.
+
+---
+
 ## [2026-11-06] — Gestão de usuários no painel
 
 - `V8_users_active`: `users.active` (padrão true). Login (`FindByEmail`) e `/auth/me` (`FindByID`) só veem usuários ativos; `/auth/me` passa a responder 401 (antes 404) para usuário inexistente ou desativado, e o painel volta ao login.

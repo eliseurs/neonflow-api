@@ -422,3 +422,30 @@ func TestBookingRepository_DepositAndKm(t *testing.T) {
 	assert.Equal(t, 300, *avail[0].KmLimitPerDay, "a disponibilidade traz o plano atual do veículo")
 	assert.Equal(t, int64(150000), *avail[0].DepositCents)
 }
+
+func TestBookingRepository_Referrer(t *testing.T) {
+	database := testutil.MigratedDB(t, "../../../../sql/migrations")
+	repo := NewBookingRepository(database)
+	ctx := context.Background()
+	userID, vehicleID := seed(t, database)
+	var partnerID string
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO partners (name, is_referrer, referral_code) VALUES ('Hotel Teste', true, 'HTL234') RETURNING id`).Scan(&partnerID))
+
+	// RN-07.5: a reserva guarda o parceiro que indicou.
+	b, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Indicado",
+		Period: period(t, "2026-12-10T10:00", "2026-12-11T10:00"), CreatedBy: userID, ReferredBy: partnerID})
+	require.NoError(t, err)
+	require.NotNil(t, b.ReferredByPartnerID)
+	assert.Equal(t, partnerID, *b.ReferredByPartnerID)
+
+	direct, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Direto",
+		Period: period(t, "2026-12-12T10:00", "2026-12-13T10:00"), CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Nil(t, direct.ReferredByPartnerID)
+
+	_, err = repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Inexistente",
+		Period: period(t, "2026-12-14T10:00", "2026-12-15T10:00"), CreatedBy: userID,
+		ReferredBy: "00000000-0000-0000-0000-000000000000"})
+	assert.ErrorIs(t, err, booking.ErrReferrerNotFound)
+}

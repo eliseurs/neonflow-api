@@ -2,6 +2,7 @@ package booking
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ const (
 	// PaymentWindow é o prazo para pagar a pré-reserva; depois ela é cancelada (RN-02.8, RN-02.11, ADR-0012).
 	PaymentWindow = 24 * time.Hour
 )
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // Conferências exigidas para sair de cada etapa (RN-02.3, RN-02.4). "payment" é o pagamento
 // integral confirmado pela central (RN-02.14); "terms" é o aceite dos termos (ADR-0013).
@@ -79,14 +82,16 @@ type Booking struct {
 	KmLimitPerDay *int   `json:"km_limit_per_day"`
 	ExtraKmCents  *int64 `json:"extra_km_cents"`
 	// Odômetro na entrega e na devolução e o excedente cobrado (RN-02.18).
-	DeliveredKm   *int      `json:"delivered_km"`
-	ReturnedKm    *int      `json:"returned_km"`
-	ExcessKm      int       `json:"excess_km"`
-	ExcessKmCents int64     `json:"excess_km_cents"`
-	ExpiresAt     time.Time `json:"expires_at"`
-	CreatedBy     *string   `json:"created_by"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	// Parceiro que indicou o cliente (origem, RN-07.5). A comissão vem na fase 2 (RN-03.2).
+	ReferredByPartnerID *string   `json:"referred_by_partner_id"`
+	DeliveredKm         *int      `json:"delivered_km"`
+	ReturnedKm          *int      `json:"returned_km"`
+	ExcessKm            int       `json:"excess_km"`
+	ExcessKmCents       int64     `json:"excess_km_cents"`
+	ExpiresAt           time.Time `json:"expires_at"`
+	CreatedBy           *string   `json:"created_by"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // Event é uma transição de etapa. UserID nulo indica transição automática (expiração).
@@ -108,6 +113,8 @@ type CreateRequest struct {
 	EndDate    string `json:"end_date"`
 	Place      string `json:"place"`
 	KmPlan     string `json:"km_plan"`
+	// ReferredByPartnerID é o parceiro que indicou (vem do código na mensagem do WhatsApp).
+	ReferredByPartnerID string `json:"referred_by_partner_id"`
 }
 
 // AdvanceRequest é o corpo opcional do avanço de etapa. At é a hora real da entrega
@@ -159,6 +166,7 @@ type NewBooking struct {
 	Place      string
 	CreatedBy  string
 	KmPlan     string
+	ReferredBy string
 }
 
 // Period é o intervalo [Start, End) entre a retirada e a devolução combinadas.
@@ -230,6 +238,10 @@ func (r CreateRequest) Validate(userID string) (NewBooking, error) {
 		Place:      strings.TrimSpace(r.Place),
 		CreatedBy:  userID,
 		KmPlan:     strings.ToLower(strings.TrimSpace(r.KmPlan)),
+		ReferredBy: strings.TrimSpace(r.ReferredByPartnerID),
+	}
+	if n.ReferredBy != "" && !uuidPattern.MatchString(n.ReferredBy) {
+		return n, ErrReferrerNotFound
 	}
 	if n.KmPlan != "" && n.KmPlan != KmPlanLivre && n.KmPlan != KmPlanLimitado {
 		return n, ErrInvalidKmPlan
