@@ -8,6 +8,12 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Rodada 6 do questionário (cadastro do cliente)
+
+- Respostas registradas: RN-04.4 ganha validade, primeira habilitação, categoria e país da CNH (q99) e confirma a foto (q102); RN-06.7 nova, condutor adicional sem custo com nome, documento e CNH (q101); prazo de retenção ainda não definido (q103), então os documentos seguem fora. RN-06.8 nova (q100, respondida no CLI): o sistema bloqueia a reserva sem motorista de quem não cumpre idade ou tempo de habilitação, quando os documentos entrarem. PEN-48 atualizada.
+
+---
+
 ## [2026-11-06] — Cadastro de clientes (fase 1)
 
 - `V15_customers`: tabela `customers` (nome, WhatsApp único quando preenchido, e-mail, idioma, observações, `anonymized_at`); `bookings.customer_id` e `transfers.customer_id`.
