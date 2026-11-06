@@ -50,6 +50,10 @@ jobs:
       - name: Build
         run: go build -trimpath -o bin/ ./cmd/...
 
+      # A mesma imagem do Railway: pega diferença entre o go.mod e o Go do Dockerfile.
+      - name: Build da imagem Docker
+        run: docker build -t neonflow-api-ci .
+
       - name: Testes unitários e de integração
         run: make test-integration
 
