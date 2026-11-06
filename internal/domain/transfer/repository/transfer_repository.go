@@ -22,7 +22,7 @@ const (
 		SELECT t.id, t.client_name, t.pickup_at, t.origin, t.destination, t.flight, t.passengers, t.notes,
 		       t.price_cents, t.stage, t.offer_cents, t.driver_partner_id, d.name,
 		       t.driver_cents, t.vehicle_id, v.name, t.paid_at, t.extra_wait_cents, t.cancel_fee_cents, t.flight_cancelled,
-		       t.referred_by_partner_id, t.created_by, t.created_at, t.updated_at
+		       		       t.referred_by_partner_id, t.customer_id, t.created_by, t.created_at, t.updated_at
 		FROM transfers t
 		LEFT JOIN partners d ON d.id = t.driver_partner_id
 		LEFT JOIN vehicles v ON v.id = t.vehicle_id`
@@ -32,8 +32,8 @@ const (
 	queryLock   = transferSelect + ` WHERE t.id = $1 FOR UPDATE OF t`
 	queryCreate = `
 		INSERT INTO transfers (client_name, pickup_at, origin, destination, flight, passengers, notes, price_cents,
-		                       referred_by_partner_id, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, '')::uuid, NULLIF($10, '')::uuid)
+		                       		                       referred_by_partner_id, customer_id, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9, '')::uuid, NULLIF($10, '')::uuid, NULLIF($11, '')::uuid)
 		RETURNING id`
 	queryEvent  = `INSERT INTO transfer_events (transfer_id, action, detail, user_id) VALUES ($1, $2, $3, NULLIF($4, '')::uuid)`
 	queryEvents = `
@@ -142,10 +142,13 @@ func (r *TransferRepository) Create(ctx context.Context, n transfer.NewTransfer)
 	err := r.inTx(ctx, func(tx *sql.Tx) error {
 		var id string
 		err := tx.QueryRowContext(ctx, queryCreate, n.ClientName, n.PickupAt, n.Origin, n.Destination, n.Flight,
-			n.Passengers, n.Notes, n.PriceCents, n.ReferredBy, n.CreatedBy).Scan(&id)
+			n.Passengers, n.Notes, n.PriceCents, n.ReferredBy, n.CustomerID, n.CreatedBy).Scan(&id)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation {
+				if pgErr.ConstraintName == "transfers_customer_id_fkey" {
+					return transfer.ErrCustomerNotFound
+				}
 				return transfer.ErrReferrerNotFound
 			}
 			return fmt.Errorf("create transfer: %w", err)
@@ -401,11 +404,11 @@ func scan(s scanner) (transfer.Transfer, error) {
 	var t transfer.Transfer
 	var offer, driverCents sql.NullInt64
 	var paid sql.NullTime
-	var driverID, driverName, vehicleID, vehicleName, referred, createdBy sql.NullString
+	var driverID, driverName, vehicleID, vehicleName, referred, customerID, createdBy sql.NullString
 	err := s.Scan(&t.ID, &t.ClientName, &t.PickupAt, &t.Origin, &t.Destination, &t.Flight, &t.Passengers, &t.Notes,
 		&t.PriceCents, &t.Stage, &offer, &driverID, &driverName,
 		&driverCents, &vehicleID, &vehicleName, &paid, &t.ExtraWaitCents, &t.CancelFeeCents, &t.FlightCancelled,
-		&referred, &createdBy, &t.CreatedAt, &t.UpdatedAt)
+		&referred, &customerID, &createdBy, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return t, err
 	}
@@ -418,6 +421,7 @@ func scan(s scanner) (transfer.Transfer, error) {
 	t.VehicleName = nullString(vehicleName)
 	t.PaidAt = localTime(paid)
 	t.ReferredByPartnerID = nullString(referred)
+	t.CustomerID = nullString(customerID)
 	t.CreatedBy = nullString(createdBy)
 	return t, nil
 }

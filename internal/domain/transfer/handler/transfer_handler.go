@@ -148,6 +148,7 @@ func (h *TransferHandler) respond(c *gin.Context, status int, data any, err erro
 	case errors.Is(err, transfer.ErrClientRequired), errors.Is(err, transfer.ErrInvalidPickup),
 		errors.Is(err, transfer.ErrRouteRequired), errors.Is(err, transfer.ErrInvalidPassengers),
 		errors.Is(err, transfer.ErrInvalidPrice), errors.Is(err, transfer.ErrReferrerNotFound),
+		errors.Is(err, transfer.ErrCustomerNotFound),
 		errors.Is(err, transfer.ErrInvalidOffer), errors.Is(err, transfer.ErrOfferDecreased),
 		errors.Is(err, transfer.ErrVehicleNotFound), errors.Is(err, transfer.ErrDriverNotFound),
 		errors.Is(err, transfer.ErrInvalidExtraWait):

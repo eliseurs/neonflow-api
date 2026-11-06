@@ -140,6 +140,7 @@ func TestTransferHandler_Errors(t *testing.T) {
 		{transfer.ErrInvalidPassengers, http.StatusBadRequest},
 		{transfer.ErrInvalidPrice, http.StatusBadRequest},
 		{transfer.ErrReferrerNotFound, http.StatusBadRequest},
+		{transfer.ErrCustomerNotFound, http.StatusBadRequest},
 		{transfer.ErrInvalidOffer, http.StatusBadRequest},
 		{transfer.ErrOfferDecreased, http.StatusBadRequest},
 		{transfer.ErrVehicleNotFound, http.StatusBadRequest},

@@ -23,7 +23,7 @@ const (
 	bookingColumns = `id, vehicle_id, client_name, start_at, end_at, place, stage, days,
 				daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_minutes, extra_cents,
 				deposit_cents, km_limit_per_day, extra_km_cents, delivered_km, returned_km, excess_km, excess_km_cents,
-				referred_by_partner_id, paid_at, expires_at, created_by, created_at, updated_at`
+								referred_by_partner_id, customer_id, paid_at, expires_at, created_by, created_at, updated_at`
 
 	// queryExpire cancela pré-reservas não pagas no prazo e registra a transição (RN-02.11).
 	// Roda antes de toda operação, então a disponibilidade nunca considera uma pré-reserva vencida.
@@ -66,9 +66,9 @@ const (
 	queryCreate = `
 				INSERT INTO bookings (vehicle_id, client_name, start_at, end_at, place, days,
 		                      daily_rate_cents, total_cents, expires_at, created_by,
-		                      		                      deposit_cents, km_limit_per_day, extra_km_cents, referred_by_partner_id)
+		                      		                      deposit_cents, km_limit_per_day, extra_km_cents, referred_by_partner_id, customer_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + make_interval(secs => $9), NULLIF($10, '')::uuid,
-		        $11, $12, $13, NULLIF($14, '')::uuid)
+		        $11, $12, $13, NULLIF($14, '')::uuid, NULLIF($15, '')::uuid)
 		RETURNING ` + bookingColumns
 	querySetChecks = `
 		UPDATE bookings
@@ -250,10 +250,13 @@ func (r *BookingRepository) Create(ctx context.Context, n booking.NewBooking) (b
 		days := n.Period.Days()
 		created, err = scanBooking(tx.QueryRowContext(ctx, queryCreate,
 			n.VehicleID, n.ClientName, n.Period.Start, n.Period.End, n.Place, days,
-			rate, int64(days)*rate, booking.PaymentWindow.Seconds(), n.CreatedBy, deposit, kmLimit, extraKm, n.ReferredBy))
+			rate, int64(days)*rate, booking.PaymentWindow.Seconds(), n.CreatedBy, deposit, kmLimit, extraKm, n.ReferredBy, n.CustomerID))
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation {
+				if pgErr.ConstraintName == "bookings_customer_id_fkey" {
+					return booking.ErrCustomerNotFound
+				}
 				return booking.ErrReferrerNotFound
 			}
 			return mapError(err, booking.ErrBookingNotFound, "create booking")
@@ -401,11 +404,11 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	var delivered, returned, paid sql.NullTime
 	var deposit, extraKm sql.NullInt64
 	var kmLimit, deliveredKm, returnedKm sql.NullInt32
-	var referredBy sql.NullString
+	var referredBy, customerID sql.NullString
 	err := s.Scan(&b.ID, &b.VehicleID, &b.ClientName, &start, &end, &b.Place, &b.Stage, &b.Days,
 		&b.DailyRateCents, &b.TotalCents, &checks, &delivered, &returned, &b.ExtraMinutes, &b.ExtraCents,
 		&deposit, &kmLimit, &extraKm, &deliveredKm, &returnedKm, &b.ExcessKm, &b.ExcessKmCents,
-		&referredBy, &paid, &b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
+		&referredBy, &customerID, &paid, &b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return b, err
 	}
@@ -415,6 +418,7 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	b.EndDate = timezone.Date(end)
 	b.CreatedBy = nullable(createdBy)
 	b.ReferredByPartnerID = nullable(referredBy)
+	b.CustomerID = nullable(customerID)
 	b.DeliveredAt = localTime(delivered)
 	b.ReturnedAt = localTime(returned)
 	b.PaidAt = localTime(paid)

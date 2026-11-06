@@ -85,15 +85,17 @@ type Booking struct {
 	ExtraKmCents  *int64 `json:"extra_km_cents"`
 	// Odômetro na entrega e na devolução e o excedente cobrado (RN-02.18).
 	// Parceiro que indicou o cliente (origem, RN-07.5). A comissão vem na fase 2 (RN-03.2).
-	ReferredByPartnerID *string   `json:"referred_by_partner_id"`
-	DeliveredKm         *int      `json:"delivered_km"`
-	ReturnedKm          *int      `json:"returned_km"`
-	ExcessKm            int       `json:"excess_km"`
-	ExcessKmCents       int64     `json:"excess_km_cents"`
-	ExpiresAt           time.Time `json:"expires_at"`
-	CreatedBy           *string   `json:"created_by"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ReferredByPartnerID *string `json:"referred_by_partner_id"`
+	// Cliente cadastrado (RN-04.7); client_name guarda o nome no dia da reserva.
+	CustomerID    *string   `json:"customer_id"`
+	DeliveredKm   *int      `json:"delivered_km"`
+	ReturnedKm    *int      `json:"returned_km"`
+	ExcessKm      int       `json:"excess_km"`
+	ExcessKmCents int64     `json:"excess_km_cents"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	CreatedBy     *string   `json:"created_by"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // Event é uma transição de etapa. UserID nulo indica transição automática (expiração).
@@ -117,6 +119,8 @@ type CreateRequest struct {
 	KmPlan     string `json:"km_plan"`
 	// ReferredByPartnerID é o parceiro que indicou (vem do código na mensagem do WhatsApp).
 	ReferredByPartnerID string `json:"referred_by_partner_id"`
+	// CustomerID liga a reserva ao cadastro do cliente (opcional).
+	CustomerID string `json:"customer_id"`
 }
 
 // AdvanceRequest é o corpo opcional do avanço de etapa. At é a hora real da entrega
@@ -173,6 +177,7 @@ type NewBooking struct {
 	CreatedBy  string
 	KmPlan     string
 	ReferredBy string
+	CustomerID string
 }
 
 // Period é o intervalo [Start, End) entre a retirada e a devolução combinadas.
@@ -245,6 +250,10 @@ func (r CreateRequest) Validate(userID string) (NewBooking, error) {
 		CreatedBy:  userID,
 		KmPlan:     strings.ToLower(strings.TrimSpace(r.KmPlan)),
 		ReferredBy: strings.TrimSpace(r.ReferredByPartnerID),
+		CustomerID: strings.TrimSpace(r.CustomerID),
+	}
+	if n.CustomerID != "" && !uuidPattern.MatchString(n.CustomerID) {
+		return n, ErrCustomerNotFound
 	}
 	if n.ReferredBy != "" && !uuidPattern.MatchString(n.ReferredBy) {
 		return n, ErrReferrerNotFound
