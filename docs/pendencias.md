@@ -1,6 +1,6 @@
 # Registro de pendências
 
-**66 pendências, 15 bloqueantes** (31 resolvidas, 14 parciais, 21 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
+**66 pendências, 15 bloqueantes** (33 resolvidas, 12 parciais, 21 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
@@ -73,8 +73,8 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 | PEN-28 | Veículo "Livre" com reserva futura confirmada | Alta | `vehicleState` (app.js:20) | resolvida em 06/11/2026: a frota mostra "Reservado" e a próxima reserva ([RN-01.3](../.claude/business-rules/01-frota.md), q81); falta implementar | CT-10 |
 | PEN-29 | Sem horário, intervalo de limpeza ou fuso; 09:00 fixo | Alta | `createBooking` | resolvida em 06/11/2026: horário livre combinado com a central, diária em períodos de 24h a partir da retirada, saída no mesmo dia com checklist aprovado, central 24h ([RN-02.23 a 02.26](../.claude/business-rules/02-reservas.md), q66–q69); fuso `America/Sao_Paulo` por suposição técnica; falta implementar (a API usa só datas) | Dossiê F |
 | PEN-30 | Financeiro remove cancelada paga; sem caução, custos, conciliação, repasses | Alta | `finance` (app.js:29) | aberta | Dossiê F |
-| PEN-31 | Testes legados fora do CI | Média | `prototipo/tests/legacy/` | parcial: trazidos para o repo em 03/11/2026; falta CI | 02_CENARIOS |
-| PEN-32 | Sem lint, formatação nem CI | Média | raiz | parcial: Makefile, ESLint (app) e `go vet` (api) em 03/11/2026; falta CI | Manifesto |
+| PEN-31 | Testes legados fora do CI | Média | `prototipo/tests/legacy/` | resolvida em 06/11/2026: rodam no CI do `neonflow-app` (`.github/workflows/ci.yml`, passo "Testes do protótipo congelado") | 02_CENARIOS |
+| PEN-32 | Sem lint, formatação nem CI | Média | raiz | resolvida em 06/11/2026: GitHub Actions em todo PR e push no `main`. API: gofmt, `go vet`, build, testes unitários e de integração com PostgreSQL 16 e cobertura mínima de 80% em `internal/`. App: TypeScript, ESLint, Vitest, build e testes do protótipo | Manifesto |
 | PEN-33 | README cita 8 áreas (são 9); agenda com data fixa 27/09/2026 | Baixa | `README.md`, `central` (app.js:24) | aberta | Dossiê I |
 | PEN-34 | Google Fonts externo; WebMCP nunca testado | Baixa | `style.css:1`, app.js:51 | aberta | Dossiê H |
 
