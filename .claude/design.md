@@ -39,7 +39,8 @@ internal/
         partner/                # parceiros: proprietário, motorista, indicador; código de indicação (RN-07)
         payout/                 # comissão do indicador e repasse ao dono, gerados no encerramento (RN-03.12, RN-03.13)
         dashboard/              # indicadores da tela inicial: faturamento do mês e ocupação (PEN-11)
-    transfer/               # transfer operado pela central: oferta, aceite, desistência, conclusão (RN-02.9 a 02.31)
+        transfer/               # transfer operado pela central: oferta, aceite, desistência, conclusão (RN-02.9 a 02.31)
+    customer/               # clientes: contato, idioma, histórico e anonimização (RN-04.7, RN-04.8)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -94,6 +95,10 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PUT | `/api/partners/:id` | admin, central | Substitui os dados (o código não muda); `active` ausente mantém |
 | GET | `/api/payouts?kind=&status=&partner_id=` | admin, central | Comissões (`comissao`) e repasses (`repasse`); `status` pendente ou paga |
 | POST | `/api/payouts/:id/pay` | admin, central | Marca como pago (data e quem marcou). 409 se já pago ou sem percentual |
+| GET | `/api/customers?q=` | admin, central | Clientes (busca por nome, e-mail ou dígitos do WhatsApp; até 200; anonimizados por último) |
+| GET | `/api/customers/:id` | admin, central | Cliente e histórico de reservas e transfers |
+| POST, PUT | `/api/customers`, `/api/customers/:id` | admin, central | `name`, `whatsapp` (único), `email`, `language` (pt\|en), `notes`. 409 se o WhatsApp já existe ou o cliente foi anonimizado |
+| POST | `/api/customers/:id/anonymize` | admin | Apaga nome e contatos, também nos pedidos (LGPD) |
 | GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
 | POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
 | GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
@@ -136,6 +141,11 @@ vehicles
     daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
       deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
+
+customers (V15)                         -- RN-04.7, RN-04.8; sem documentos (PEN-48)
+  id, name, whatsapp (dígitos, UNIQUE quando preenchido), email, language CHECK (pt|en), notes
+  anonymized_at, created_at, updated_at
+  bookings.customer_id, transfers.customer_id FK NULL   -- client_name segue como o nome no dia do pedido
 
 transfers (V13)                         -- RN-02.9 a 02.31
   id, client_name, pickup_at, origin, destination, flight, passengers 1..60, notes

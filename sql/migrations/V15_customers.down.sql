@@ -1,0 +1,3 @@
+ALTER TABLE transfers DROP COLUMN IF EXISTS customer_id;
+ALTER TABLE bookings DROP COLUMN IF EXISTS customer_id;
+DROP TABLE IF EXISTS customers;

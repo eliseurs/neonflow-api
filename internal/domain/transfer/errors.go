@@ -10,6 +10,7 @@ var (
 	ErrInvalidPassengers = errors.New("passageiros deve ficar entre 1 e 60")
 	ErrInvalidPrice      = errors.New("o preço da corrida deve ser maior que zero")
 	ErrReferrerNotFound  = errors.New("parceiro indicador não encontrado")
+	ErrCustomerNotFound  = errors.New("cliente não encontrado")
 	ErrInvalidOffer      = errors.New("o valor da oferta deve ser maior que zero")
 	ErrOfferDecreased    = errors.New("o valor para o motorista não pode ser menor que o já oferecido")
 	ErrNoOffer           = errors.New("informe o valor para o motorista")

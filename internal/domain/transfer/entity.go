@@ -48,13 +48,15 @@ type Transfer struct {
 	VehicleName *string    `json:"vehicle_name"`
 	PaidAt      *time.Time `json:"paid_at"`
 	// Espera no aeroporto além dos 60 minutos inclusos, informada na conclusão; vai para o motorista (RN-02.16).
-	ExtraWaitCents      int64     `json:"extra_wait_cents"`
-	CancelFeeCents      int64     `json:"cancel_fee_cents"`
-	FlightCancelled     bool      `json:"flight_cancelled"`
-	ReferredByPartnerID *string   `json:"referred_by_partner_id"`
-	CreatedBy           *string   `json:"created_by"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	ExtraWaitCents      int64   `json:"extra_wait_cents"`
+	CancelFeeCents      int64   `json:"cancel_fee_cents"`
+	FlightCancelled     bool    `json:"flight_cancelled"`
+	ReferredByPartnerID *string `json:"referred_by_partner_id"`
+	// Cliente cadastrado (RN-04.7); client_name guarda o nome no dia do pedido.
+	CustomerID *string   `json:"customer_id"`
+	CreatedBy  *string   `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type Event struct {
@@ -75,6 +77,7 @@ type CreateRequest struct {
 	Notes               string `json:"notes"`
 	PriceCents          int64  `json:"price_cents"`
 	ReferredByPartnerID string `json:"referred_by_partner_id"`
+	CustomerID          string `json:"customer_id"`
 }
 
 // NewTransfer é o que o repository grava.
@@ -88,6 +91,7 @@ type NewTransfer struct {
 	Notes       string
 	PriceCents  int64
 	ReferredBy  string
+	CustomerID  string
 	CreatedBy   string
 }
 
@@ -101,6 +105,7 @@ func (r CreateRequest) Validate(userID string) (NewTransfer, error) {
 		Notes:       strings.TrimSpace(r.Notes),
 		PriceCents:  r.PriceCents,
 		ReferredBy:  strings.TrimSpace(r.ReferredByPartnerID),
+		CustomerID:  strings.TrimSpace(r.CustomerID),
 		CreatedBy:   userID,
 	}
 	if n.Passengers == 0 {
@@ -120,6 +125,8 @@ func (r CreateRequest) Validate(userID string) (NewTransfer, error) {
 		return n, ErrInvalidPrice
 	case n.ReferredBy != "" && !uuidPattern.MatchString(n.ReferredBy):
 		return n, ErrReferrerNotFound
+	case n.CustomerID != "" && !uuidPattern.MatchString(n.CustomerID):
+		return n, ErrCustomerNotFound
 	}
 	n.PickupAt = at
 	return n, nil

@@ -109,6 +109,8 @@ func TestCreateRequestValidate(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidKmPlan)
 	_, err = CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12", ReferredByPartnerID: "abc"}.Validate("u1")
 	assert.ErrorIs(t, err, ErrReferrerNotFound)
+	_, err = CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12", CustomerID: "abc"}.Validate("u1")
+	assert.ErrorIs(t, err, ErrCustomerNotFound)
 	ref, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartDate: "2026-12-10", EndDate: "2026-12-12",
 		ReferredByPartnerID: " 00000000-0000-0000-0000-000000000001 "}.Validate("u1")
 	require.NoError(t, err)

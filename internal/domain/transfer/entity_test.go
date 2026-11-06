@@ -36,6 +36,7 @@ func TestCreateRequestValidate(t *testing.T) {
 		{"passageiros negativos", func(r *CreateRequest) { r.Passengers = -1 }, ErrInvalidPassengers},
 		{"preço", func(r *CreateRequest) { r.PriceCents = 0 }, ErrInvalidPrice},
 		{"indicador", func(r *CreateRequest) { r.ReferredByPartnerID = "x" }, ErrReferrerNotFound},
+		{"cliente", func(r *CreateRequest) { r.CustomerID = "x" }, ErrCustomerNotFound},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

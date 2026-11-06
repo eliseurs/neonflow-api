@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Cadastro de clientes (fase 1)
+
+- `V15_customers`: tabela `customers` (nome, WhatsApp único quando preenchido, e-mail, idioma, observações, `anonymized_at`); `bookings.customer_id` e `transfers.customer_id`.
+- Domínio `customer`: listar com busca (nome, e-mail ou dígitos do WhatsApp), ver com o histórico de reservas e transfers, criar, editar e anonimizar (só admin; apaga nome e contatos também em `client_name` dos pedidos e nas observações do transfer).
+- Reserva e transfer aceitam `customer_id`; cliente inexistente responde 400 (distingue pela constraint de FK).
+- Nenhum dado do cliente vai para o log (teste dedicado); o logger de requisições já não grava query string.
+- Regras RN-04.7 e RN-04.8; PEN-15 e PEN-48 atualizadas. Documentos seguem fora.
+
+---
+
 ## [2026-11-06] — Despacho do transfer revisto
 
 - Fundador pediu um fluxo mais direto: a central chama os motoristas um a um e só marca quem aceitou. Sem prazo de oferta (RN-02.30 revista).
