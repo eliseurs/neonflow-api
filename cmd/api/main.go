@@ -10,6 +10,7 @@ import (
 	checklistRoute "neonflow-api/internal/domain/checklist/route"
 	fleetRoute "neonflow-api/internal/domain/fleet/route"
 	partnerRoute "neonflow-api/internal/domain/partner/route"
+	payoutRoute "neonflow-api/internal/domain/payout/route"
 	userRoute "neonflow-api/internal/domain/user/route"
 	"neonflow-api/internal/infra/api"
 	"neonflow-api/internal/infra/db"
@@ -42,6 +43,7 @@ func main() {
 	checklistRoute.Register(app)
 	userRoute.Register(app)
 	partnerRoute.Register(app)
+	payoutRoute.Register(app)
 
 	app.Server()
 }

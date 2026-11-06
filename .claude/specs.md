@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Comissão do indicador e repasse ao proprietário
+
+- `V11_partner_payouts`: tabela `partner_payouts` (tipo `comissao` ou `repasse`, base, percentual copiado do parceiro, valor, pago em/por), uma por tipo e reserva; preenche as reservas já encerradas.
+- No encerramento da reserva (`Transition` para "encerrada"), na mesma transação: comissão do indicador sobre as diárias (`total_cents`) e repasse ao dono do carro parceiro sobre diárias + atraso + km (`total_cents + extra_cents + excess_km_cents`). Carro próprio e reserva sem indicação não geram nada.
+- Domínio `payout`: `GET /api/payouts` (filtros tipo, situação, parceiro) e `POST /api/payouts/:id/pay` (admin e central). Percentual nulo no encerramento: a definir, e o pagamento usa o percentual do parceiro naquele momento (409 se continuar nulo).
+- Regras RN-03.12 e RN-03.13; RN-03.2 e RN-03.4 atualizadas; PEN-08 e PEN-09.
+
+---
+
 ## [2026-11-06] — Atraso por minuto, km controlado e rodada 5 do questionário
 
 - `V10_atraso_e_km`: `bookings.extra_minutes` substitui `extra_days` (reservas antigas: 1 diária = 1440 minutos, valor igual). As checagens do plano de km passam a aceitar limite sem valor do excedente; valor sem limite continua recusado.
