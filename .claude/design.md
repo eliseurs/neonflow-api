@@ -34,7 +34,8 @@ internal/
     authentication/         # login, me, criação de usuário (CLI)
     fleet/                  # veículos (RN-01)
     booking/                # reservas, disponibilidade e histórico (RN-02)
-    checklist/              # itens do checklist de devolução, configuráveis (RN-01.6)
+        checklist/              # itens do checklist de devolução, configuráveis (RN-01.6)
+    user/                   # gestão de usuários pelo admin e troca da própria senha (RN-05.7)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -77,6 +78,11 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/checklist-items` | admin, central | Itens do checklist de devolução, em ordem (ativos e inativos) |
 | POST | `/api/checklist-items` | admin, central | Novo item (`label`, `position`, `active`); a chave sai do nome e não muda |
 | PUT | `/api/checklist-items/:id` | admin, central | Troca `label`, `position` e `active` (ausente mantém) |
+| GET | `/api/users` | admin | Usuários do painel (ativos primeiro) |
+| POST | `/api/users` | admin | Cria (`name`, `email`, `password` com 10+ caracteres, `role`) |
+| PUT | `/api/users/:id` | admin | Troca `name`, `role` e `active` (ausente mantém). 409 se o admin tentar se desativar ou deixar de ser admin |
+| POST | `/api/users/:id/password` | admin | Redefine a senha de outro usuário (`password`) |
+| POST | `/api/auth/password` | todos | Troca a própria senha (`current_password`, `new_password`) |
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
@@ -91,6 +97,7 @@ users
   id UUID PK DEFAULT gen_random_uuid()
   name, email, password_hash TEXT NOT NULL
   role TEXT CHECK (role IN ('admin','central'))
+  active BOOL DEFAULT true              -- V8: desativado não entra
   created_at, updated_at TIMESTAMPTZ
   UNIQUE INDEX lower(email)
 

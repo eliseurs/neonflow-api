@@ -41,6 +41,14 @@ func TestAuthRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Central Teste", u.Name)
 
+	// Desativado não entra nem mantém a sessão.
+	_, err = database.ExecContext(ctx, `UPDATE users SET active = false WHERE id = $1`, created.ID)
+	require.NoError(t, err)
+	_, err = repo.FindByEmail(ctx, "central@neonflow.test")
+	assert.ErrorIs(t, err, authentication.ErrUserNotFound)
+	_, err = repo.FindByID(ctx, created.ID)
+	assert.ErrorIs(t, err, authentication.ErrUserNotFound)
+
 	_, err = repo.FindByID(ctx, "00000000-0000-0000-0000-000000000000")
 	assert.ErrorIs(t, err, authentication.ErrUserNotFound)
 

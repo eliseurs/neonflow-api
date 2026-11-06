@@ -9,6 +9,7 @@ import (
 	bookingRoute "neonflow-api/internal/domain/booking/route"
 	checklistRoute "neonflow-api/internal/domain/checklist/route"
 	fleetRoute "neonflow-api/internal/domain/fleet/route"
+	userRoute "neonflow-api/internal/domain/user/route"
 	"neonflow-api/internal/infra/api"
 	"neonflow-api/internal/infra/db"
 	"neonflow-api/internal/pkg/logger"
@@ -38,6 +39,7 @@ func main() {
 	fleetRoute.Register(app)
 	bookingRoute.Register(app)
 	checklistRoute.Register(app)
+	userRoute.Register(app)
 
 	app.Server()
 }

@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Gestão de usuários no painel
+
+- `V8_users_active`: `users.active` (padrão true). Login (`FindByEmail`) e `/auth/me` (`FindByID`) só veem usuários ativos; `/auth/me` passa a responder 401 (antes 404) para usuário inexistente ou desativado, e o painel volta ao login.
+- Domínio `user`: `GET/POST /api/users`, `PUT /api/users/:id`, `POST /api/users/:id/password` (só admin) e `POST /api/auth/password` (qualquer usuário, com a senha atual). Mesma validação da CLI (senha de 10+ caracteres, papel admin/central). O admin não pode se desativar nem tirar o próprio papel de admin (`ErrSelfLockout`, 409).
+- RN-05.2 atualizada e RN-05.7 nova. Limite: o token de um desativado vale até expirar (12 h).
+- Testes: entidade, serviço (criação com hash, autobloqueio, senhas), handler, rota e integração (e-mail único, ativo mantido, senha). Login de inativo recusado na integração de auth. Cobertura em 95,9%.
+
+---
+
 ## [2026-11-06] — Caução, plano de km e odômetro
 
 - `V7_caucao_e_km`: no veículo, `deposit_cents`, `km_limit_per_day` e `extra_km_cents` (opcionais; limite e valor juntos). Na reserva, cópia dos três na criação e `delivered_km`, `returned_km`, `excess_km`, `excess_km_cents`.

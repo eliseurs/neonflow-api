@@ -50,8 +50,9 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 	user, err := h.svc.Me(c.Request.Context(), userID)
 	if err != nil {
+		// Usuário removido ou desativado: a sessão não vale mais, e o painel volta para o login.
 		if errors.Is(err, authentication.ErrUserNotFound) {
-			api.RespondError(c, http.StatusNotFound, authentication.ErrUserNotFound.Error())
+			api.RespondError(c, http.StatusUnauthorized, "sessão encerrada; entre de novo")
 			return
 		}
 		h.log.Error("me failed", "error", err)
