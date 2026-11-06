@@ -75,6 +75,22 @@ const (
 		SET checks = checks || $3::jsonb, updated_at = now()
 		WHERE id = $1 AND stage = $2
 		RETURNING ` + bookingColumns
+	// Pagamentos a parceiros no encerramento (RN-03.12, RN-03.13), com o percentual do parceiro no momento:
+	// comissão do indicador sobre as diárias; repasse ao dono do carro parceiro sobre diárias + atraso + km.
+	queryCreatePayouts = `
+		INSERT INTO partner_payouts (booking_id, partner_id, kind, base_cents, percent_bp, amount_cents)
+		SELECT b.id, p.id, 'comissao', b.total_cents, p.commission_bp,
+		       CASE WHEN p.commission_bp IS NULL THEN NULL ELSE (b.total_cents * p.commission_bp + 5000) / 10000 END
+		FROM bookings b JOIN partners p ON p.id = b.referred_by_partner_id
+		WHERE b.id = $1
+		UNION ALL
+		SELECT b.id, p.id, 'repasse', b.total_cents + b.extra_cents + b.excess_km_cents, p.owner_share_bp,
+		       CASE WHEN p.owner_share_bp IS NULL THEN NULL
+		            ELSE ((b.total_cents + b.extra_cents + b.excess_km_cents) * p.owner_share_bp + 5000) / 10000 END
+		FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id JOIN partners p ON p.id = v.owner_partner_id
+		WHERE b.id = $1
+		ON CONFLICT (booking_id, kind) DO NOTHING
+	`
 	// Campos nulos de Record mantêm o valor atual.
 	queryTransition = `
 		UPDATE bookings
@@ -282,6 +298,12 @@ func (r *BookingRepository) Transition(ctx context.Context, id, from, to, userID
 			rec.DeliveredKm, rec.ReturnedKm, rec.ExcessKm, rec.ExcessKmCents))
 		if err != nil {
 			return mapError(err, booking.ErrStageChanged, "transition booking")
+		}
+		// Reserva encerrada (paga e finalizada) gera a comissão do indicador e o repasse ao dono (RN-03.12, RN-03.13).
+		if to == booking.StageEncerrada {
+			if _, err := tx.ExecContext(ctx, queryCreatePayouts, id); err != nil {
+				return fmt.Errorf("create payouts: %w", err)
+			}
 		}
 		return insertEvent(ctx, tx, id, from, to, userID)
 	})

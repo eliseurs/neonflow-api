@@ -18,7 +18,8 @@ Parceiros são os **proprietários de veículo**, os **motoristas** e os **indic
 
 ## Pontos em aberto (fase 2)
 
-- Cálculo da comissão e do repasse por reserva, relatório e marcação de pago (RN-03.8: só depois do pagamento e do serviço finalizado).
+- ~~Cálculo da comissão e do repasse por reserva, relatório e marcação de pago~~: feito em 06/11/2026 (RN-03.12, RN-03.13, tela Repasses).
+
 - Área do parceiro com login e resultado das indicações (PEN-14, PEN-17).
 - Ligação do motorista às corridas de transfer.
 - Atribuição automática: hoje a central escolhe o indicador lendo o código da mensagem; com reserva online, o código iria direto para a reserva.

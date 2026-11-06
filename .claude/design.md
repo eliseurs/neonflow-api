@@ -36,7 +36,8 @@ internal/
     booking/                # reservas, disponibilidade e histórico (RN-02)
         checklist/              # itens do checklist de devolução, configuráveis (RN-01.6)
         user/                   # gestão de usuários pelo admin e troca da própria senha (RN-05.7)
-    partner/                # parceiros: proprietário, motorista, indicador; código de indicação (RN-07)
+        partner/                # parceiros: proprietário, motorista, indicador; código de indicação (RN-07)
+    payout/                 # comissão do indicador e repasse ao dono, gerados no encerramento (RN-03.12, RN-03.13)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -89,6 +90,8 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/partners/code/:code` | admin, central | Parceiro pelo código de indicação |
 | POST | `/api/partners` | admin, central | Cria (`name`, `kinds[]`, contato, percentuais 0–100 ou nulo); gera `referral_code` |
 | PUT | `/api/partners/:id` | admin, central | Substitui os dados (o código não muda); `active` ausente mantém |
+| GET | `/api/payouts?kind=&status=&partner_id=` | admin, central | Comissões (`comissao`) e repasses (`repasse`); `status` pendente ou paga |
+| POST | `/api/payouts/:id/pay` | admin, central | Marca como pago (data e quem marcou). 409 se já pago ou sem percentual |
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
@@ -119,6 +122,12 @@ vehicles
     daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
       deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
+
+partner_payouts (V11)                   -- RN-03.12, RN-03.13; gerados ao encerrar a reserva
+  id, booking_id FK, partner_id FK, kind CHECK (comissao|repasse), UNIQUE (booking_id, kind)
+  base_cents                            -- comissao: diárias; repasse: diárias + atraso + km
+  percent_bp, amount_cents NULL         -- cópia do parceiro no encerramento; nulo = a definir (copiado no pagamento)
+  paid_at, paid_by FK users, created_at
 
 partners (V9)                           -- RN-07
   id, name, is_owner, is_driver, is_referrer BOOL (ao menos um)
