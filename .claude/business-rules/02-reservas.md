@@ -21,13 +21,18 @@
 | RN-02.15 | Aluguel com motorista é **sempre sob consulta**, como o transfer | aprovada (04/11/2026, fundador) | — | PEN-02 |
 | RN-02.16 | Transfer: a espera no aeroporto depois dos 60 minutos inclusos é **cobrada por hora** | aprovada (04/11/2026, fundador); valor da hora não informado | — | PEN-07 |
 | RN-02.17 | Transfer: a corrida é **oferecida aos motoristas**, e o primeiro que aceitar fica com ela | aprovada (04/11/2026, fundador) | — | PEN-07 |
-| RN-02.18 | Aluguel sem motorista tem **limite de km por dia, configurável** pela operação, porque varia com a época e o fluxo (RN-01.5) | aprovada (05/11/2026, fundador, q55) | — | PEN-02 |
+| RN-02.18 | Quilometragem do aluguel sem motorista é **acordada na contratação**: **km livre** ou **limite de km por dia**. Com limite, o **km excedente é cobrado** por km. Limite e valor do km são configuráveis pela operação e variam com a época e o fluxo (RN-01.5) | aprovada (05/11/2026, q55; formato e cobrança em 06/11/2026, q82) | — | PEN-02 |
 | RN-02.19 | Devolução atrasada: **tolerância de 1 hora**; passado isso, cobra-se **uma diária extra** | aprovada (05/11/2026, fundador, q56) | — | PEN-02 |
 | RN-02.20 | Extensão do aluguel: o cliente pede à central, que verifica a disponibilidade do veículo. Se estiver livre, o cliente **paga a diferença**; se não, a central **oferece outro veículo da mesma categoria** | aprovada (05/11/2026, fundador, q57) | — | PEN-02 |
 | RN-02.21 | **Aluguel:** cancelamento **grátis até 48 horas antes** da retirada. Depois disso, cobra-se **1 diária**. Como a reserva já está paga (RN-02.14), o restante é estornado (RN-03.3) | aprovada (05/11/2026, fundador, q54) | — | PEN-06 |
 | RN-02.22 | Transfer: se nenhum motorista aceitar a corrida, a **oferta é reaberta com valor maior para o motorista** | aprovada (05/11/2026, fundador, q59); prazo e acréscimo não informados | — | PEN-07 |
+| RN-02.23 | Horário de retirada e devolução é **livre**, combinado com a central antes da retirada | aprovada (06/11/2026, fundador, q66) | — (a API reserva só por data) | PEN-29 |
+| RN-02.24 | A diária conta **períodos de 24 horas a partir da hora da retirada**, não dias do calendário. Junto com RN-02.19: até 1 hora além do último período não cobra; passado isso, cobra mais uma diária | aprovada (06/11/2026, fundador, q67) | — (hoje `days` = diferença de datas) | PEN-29 |
+| RN-02.25 | Entre uma devolução e a próxima retirada não há intervalo fixo: o carro **pode sair no mesmo dia**, desde que o checklist de devolução esteja aprovado (RN-01.6) | aprovada (06/11/2026, fundador, q68) | — | PEN-29, PEN-18 |
+| RN-02.26 | A central atende **24 horas, todos os dias**, por um único contato (o WhatsApp da central). Mais adiante, separa um contato de monitoramento 24h e um comercial | aprovada (06/11/2026, fundador, q69) | — | PEN-29, PEN-66 |
+| RN-02.27 | Transfer: a corrida chega ao motorista **pelo WhatsApp, avisado pela central, e pelo painel ou app do motorista**. No início, de 2 a 5 motoristas | aprovada (06/11/2026, fundador, q83 e q84) | — | PEN-07 |
 
-**Fontes:** Base v1.1 §3 e §5 (requisitos de 09/10/2025); Dossiê F; decisão do time em 03/11/2026 (RN-02.1); questionário do fundador em 03/11/2026 (RN-02.3, RN-02.8, RN-02.9), em 04/11/2026 (RN-02.10 a RN-02.17) e em 05/11/2026 (RN-02.18 a RN-02.22).
+**Fontes:** Base v1.1 §3 e §5 (requisitos de 09/10/2025); Dossiê F; decisão do time em 03/11/2026 (RN-02.1); questionário do fundador em 03/11/2026 (RN-02.3, RN-02.8, RN-02.9), em 04/11/2026 (RN-02.10 a RN-02.17) em 05/11/2026 (RN-02.18 a RN-02.22) e em 06/11/2026 (RN-02.18, RN-02.23 a RN-02.27).
 
 ## Etapas
 
@@ -56,11 +61,12 @@ stateDiagram-v2
 
 ## Pontos em aberto
 
-- Horário de retirada/devolução, intervalo de limpeza e fuso: o protótipo usa 09:00 fixo (PEN-29). A API (05/11/2026) usa só datas, sem horário.
+- Horário (PEN-29), decidido em 06/11/2026 (RN-02.23 a RN-02.26): a API ainda usa só datas (`start_date`, `end_date`, `daterange`). Implementar passa por guardar data e hora (`tstzrange`), calcular as diárias em blocos de 24 horas com a tolerância de 1 hora e manter o bloqueio atômico. **Fuso:** suposição técnica de `America/Sao_Paulo` (operação em Gramado); o fundador não foi perguntado.
+- **Conflito na q71 (06/11/2026), não resolvido:** o fundador marcou "aceite no site; **pagamento e caução na retirada**". Isso contradiz RN-02.14 e o [ADR-0013](../../docs/adr/ADR-0013-pagamento-online-e-moedas.md) (valor integral ao reservar, q37 e q53) e esvazia RN-02.11 (pré-reserva que não é paga em 24h expira). Até o fundador confirmar, vale o que está implementado: pagamento na reserva, confirmado pela central, e caução na retirada (a caução na retirada não contradiz nada).
 - A API guarda do cliente só o nome. A CNH é uma conferência (`cnh: true`), sem número nem documento, até PEN-48.
 - Pagamento integral na reserva (RN-02.14) faz toda reserva confirmada já estar paga. Cancelamento passa a significar sempre estorno (RN-03.3). O prazo e o meio do estorno dependem do provedor de pagamento (PEN-05).
-- RN-02.18: a cobrança do km excedente não foi dita explicitamente; o formato da pergunta (q55) previa cobrança, com valor configurável. Confirmar na implementação.
-- RN-02.19: a diária extra do atraso pode colidir com a reserva seguinte do mesmo veículo (RN-02.2). Falta definir o que a central faz nesse caso (PEN-29).
+- RN-02.18: confirmado em 06/11/2026 (q82) que o excedente é cobrado. O plano (livre ou limitado) e o limite precisam ficar na reserva, como a diária (RN-02.6).
+- RN-02.19: a diária extra do atraso pode colidir com a reserva seguinte do mesmo veículo (RN-02.2), principalmente com retirada no mesmo dia (RN-02.25). Falta definir o que a central faz nesse caso.
 - RN-02.20: o pedido de extensão passa pela central, sem autoatendimento no site.
 - RN-02.22: faltam o prazo para alguém aceitar, o valor do acréscimo (configurável, RN-01.5?) e o que acontece se, mesmo assim, ninguém aceitar ou o motorista desistir (PEN-07). O valor da hora extra de espera é configurável (RN-01.5).
 - A checagem do protótipo roda no navegador, então duas sessões podem reservar o mesmo período. Na API, o bloqueio deve ser atômico no banco (ex.: `EXCLUDE USING gist` com `daterange`) (PEN-24).
