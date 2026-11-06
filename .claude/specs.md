@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Hora real da entrega e da devolução e atraso
+
+- `V6_bookings_hora_real`: `delivered_at`, `returned_at`, `extra_days`, `extra_cents` e CHECK de devolução depois da entrega.
+- `POST /bookings/:id/advance` aceita `{"at": "AAAA-MM-DDTHH:MM"}` (padrão: agora). Na entrega grava `delivered_at`; na devolução grava `returned_at` e calcula o atraso: 1 diária por bloco de 24 horas iniciado depois de 1 hora de tolerância (`booking.LateDays`, RN-02.19). Hora no futuro (`ErrFutureTime`) e devolução antes da entrega (`ErrReturnBeforeDelivery`) dão 400.
+- `Repository.Transition` recebe `booking.Record` (campos nulos não mudam a reserva). `BookingService` ganhou relógio injetável (`now`).
+- Entrega recusada com 409 se o carro ainda está "em locação" em outra reserva (`ErrVehicleInUse`), além do checklist pendente (RN-01.6).
+- Testes: `LateDays`, hora real e atraso no serviço, corpo do avanço no handler, gravação e CHECK na integração. Cobertura em 95,3%.
+
+---
+
 ## [2026-11-06] — Reserva com horário
 
 - `V5_bookings_horario`: `start_at` e `end_at` (`TIMESTAMPTZ`) no lugar de `start_date` e `end_date`; bloqueio por `tstzrange` (RN-02.2, RN-02.23). Reservas existentes viram 09:00 de Gramado, sem mudar as diárias. Down testado (volta para datas).

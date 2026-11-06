@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/fleet"
+	"neonflow-api/internal/pkg/timezone"
 )
 
 type transition struct{ from, to, user string }
@@ -23,6 +25,7 @@ type fakeRepo struct {
 	period     booking.Period
 	items      []string
 	itemsErr   error
+	record     booking.Record
 }
 
 func (f *fakeRepo) ReturnChecklist(context.Context) ([]string, error) {
@@ -51,8 +54,9 @@ func (f *fakeRepo) SetChecks(_ context.Context, id, stage string, checks map[str
 	return booking.Booking{ID: id, Stage: stage, Checks: checks}, nil
 }
 
-func (f *fakeRepo) Transition(_ context.Context, id, from, to, user string) (booking.Booking, error) {
+func (f *fakeRepo) Transition(_ context.Context, id, from, to, user string, rec booking.Record) (booking.Booking, error) {
 	f.transition = transition{from, to, user}
+	f.record = rec
 	return booking.Booking{ID: id, Stage: to}, nil
 }
 
@@ -122,18 +126,72 @@ func TestBookingService_Advance(t *testing.T) {
 	repo := &fakeRepo{current: booking.Booking{ID: "b1", Stage: booking.StageConfirmada, Checks: map[string]bool{"delivery": true}}}
 	svc := NewBookingService(repo)
 
-	b, err := svc.Advance(ctx, "b1", "u1")
+	b, err := svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, booking.StageEmLocacao, b.Stage)
 	assert.Equal(t, transition{booking.StageConfirmada, booking.StageEmLocacao, "u1"}, repo.transition)
 
 	repo.current.Checks = map[string]bool{}
-	_, err = svc.Advance(ctx, "b1", "u1")
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	assert.ErrorIs(t, err, booking.ErrChecksPending)
 
 	repo.findErr = booking.ErrBookingNotFound
-	_, err = svc.Advance(ctx, "x", "u1")
+	_, err = svc.Advance(ctx, "x", "u1", booking.AdvanceRequest{})
 	assert.ErrorIs(t, err, booking.ErrBookingNotFound)
+}
+
+func TestBookingService_ActualTimes(t *testing.T) {
+	ctx := context.Background()
+	gramado := timezone.Location
+	now := time.Date(2026, 12, 12, 15, 0, 0, 0, gramado)
+	end := time.Date(2026, 12, 12, 10, 0, 0, 0, gramado)
+	delivered := time.Date(2026, 12, 10, 9, 40, 0, 0, gramado)
+	repo := &fakeRepo{current: booking.Booking{ID: "b1", Stage: booking.StageConfirmada, Checks: map[string]bool{"delivery": true},
+		EndAt: end, DailyRateCents: 10000}}
+	svc := NewBookingService(repo)
+	svc.now = func() time.Time { return now }
+
+	// Entrega sem hora informada: vale agora.
+	_, err := svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
+	require.NoError(t, err)
+	require.NotNil(t, repo.record.DeliveredAt)
+	assert.True(t, now.Equal(*repo.record.DeliveredAt))
+	assert.Nil(t, repo.record.ReturnedAt)
+
+	// Entrega com a hora real.
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-10T09:40"})
+	require.NoError(t, err)
+	assert.True(t, delivered.Equal(*repo.record.DeliveredAt))
+
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-12T16:00"})
+	assert.ErrorIs(t, err, booking.ErrFutureTime)
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "ontem"})
+	assert.ErrorIs(t, err, booking.ErrInvalidDate)
+
+	// Devolução às 15h, 5 horas depois do combinado: passou da tolerância, 1 diária extra (RN-02.19).
+	repo.current = booking.Booking{ID: "b1", Stage: booking.StageEmLocacao, Checks: map[string]bool{"return": true},
+		EndAt: end, DailyRateCents: 10000, DeliveredAt: &delivered}
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
+	require.NoError(t, err)
+	assert.True(t, now.Equal(*repo.record.ReturnedAt))
+	assert.Equal(t, 1, *repo.record.ExtraDays)
+	assert.Equal(t, int64(10000), *repo.record.ExtraCents)
+
+	// Dentro da tolerância de 1 hora: sem cobrança.
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-12T11:00"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, *repo.record.ExtraDays)
+	assert.Equal(t, int64(0), *repo.record.ExtraCents)
+
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-10T09:00"})
+	assert.ErrorIs(t, err, booking.ErrReturnBeforeDelivery)
+
+	// Outras etapas não gravam hora.
+	repo.current = booking.Booking{ID: "b1", Stage: booking.StagePreparacao,
+		Checks: map[string]bool{"cnh": true, "terms": true, "deposit": true, "payment": true}}
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-12T11:00"})
+	require.NoError(t, err)
+	assert.Equal(t, booking.Record{}, repo.record)
 }
 
 func TestBookingService_ReturnChecklist(t *testing.T) {
@@ -147,18 +205,18 @@ func TestBookingService_ReturnChecklist(t *testing.T) {
 	// RN-01.6: os itens do checklist são aceitos e exigidos em "devolvida".
 	_, err := svc.SetChecks(ctx, "b1", map[string]bool{"pneus": true})
 	require.NoError(t, err)
-	_, err = svc.Advance(ctx, "b1", "u1")
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	assert.ErrorIs(t, err, booking.ErrChecksPending)
 
 	repo.current.Checks = map[string]bool{"issues": true, "combustivel": true, "pneus": true}
-	b, err := svc.Advance(ctx, "b1", "u1")
+	b, err := svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, booking.StageEncerrada, b.Stage)
 
 	repo.itemsErr = errors.New("db")
 	_, err = svc.SetChecks(ctx, "b1", map[string]bool{"pneus": true})
 	assert.Error(t, err)
-	_, err = svc.Advance(ctx, "b1", "u1")
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	assert.Error(t, err)
 }
 

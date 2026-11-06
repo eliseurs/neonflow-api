@@ -17,4 +17,7 @@ var (
 	ErrNotCancelable        = errors.New("só reservas em preparação ou confirmadas podem ser canceladas")
 	ErrStageChanged         = errors.New("a reserva mudou de etapa; recarregue e tente de novo")
 	ErrAwaitingChecklist    = errors.New("o veículo aguarda o checklist de devolução de outra reserva")
+	ErrVehicleInUse         = errors.New("o veículo ainda está em locação em outra reserva")
+	ErrFutureTime           = errors.New("a hora informada ainda não chegou")
+	ErrReturnBeforeDelivery = errors.New("a devolução precisa ser depois da entrega")
 )

@@ -20,7 +20,8 @@ const (
 	invalidTextRepresentation = "22P02"
 
 	bookingColumns = `id, vehicle_id, client_name, start_at, end_at, place, stage, days,
-		daily_rate_cents, total_cents, checks, expires_at, created_by, created_at, updated_at`
+		daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_days, extra_cents,
+		expires_at, created_by, created_at, updated_at`
 
 	// queryExpire cancela pré-reservas não pagas no prazo e registra a transição (RN-02.11).
 	// Roda antes de toda operação, então a disponibilidade nunca considera uma pré-reserva vencida.
@@ -70,18 +71,25 @@ const (
 		SET checks = checks || $3::jsonb, updated_at = now()
 		WHERE id = $1 AND stage = $2
 		RETURNING ` + bookingColumns
+	// Campos nulos de Record mantêm o valor atual.
 	queryTransition = `
 		UPDATE bookings
-		SET stage = $3, updated_at = now()
+		SET stage = $3,
+		    delivered_at = coalesce($4, delivered_at),
+		    returned_at = coalesce($5, returned_at),
+		    extra_days = coalesce($6, extra_days),
+		    extra_cents = coalesce($7, extra_cents),
+		    updated_at = now()
 		WHERE id = $1 AND stage = $2
 		RETURNING ` + bookingColumns
-	// queryChecklistPending: outra reserva do mesmo veículo devolvida e sem checklist aprovado (RN-01.6).
-	queryChecklistPending = `
-		SELECT EXISTS (
-			SELECT 1 FROM bookings other
-			JOIN bookings b ON b.vehicle_id = other.vehicle_id
-			WHERE b.id = $1 AND other.id <> b.id AND other.stage = 'devolvida'
-		)
+	// queryVehicleBusy: outra reserva do mesmo veículo que impede a entrega. "em_locacao": o carro
+	// ainda está com outro cliente; "devolvida": aguarda o checklist (RN-01.6). Vazio se estiver livre.
+	queryVehicleBusy = `
+		SELECT coalesce(max(other.stage) FILTER (WHERE other.stage = 'em_locacao'),
+		                max(other.stage) FILTER (WHERE other.stage = 'devolvida'), '')
+		FROM bookings other
+		JOIN bookings b ON b.vehicle_id = other.vehicle_id
+		WHERE b.id = $1 AND other.id <> b.id AND other.stage IN ('em_locacao', 'devolvida')
 	`
 	queryReturnChecklist = `
 		SELECT key FROM checklist_items
@@ -226,24 +234,29 @@ func (r *BookingRepository) SetChecks(ctx context.Context, id, stage string, che
 }
 
 // Transition muda a etapa só se ela ainda for "from", então dois cliques não avançam duas vezes (RN-02.4).
-func (r *BookingRepository) Transition(ctx context.Context, id, from, to, userID string) (booking.Booking, error) {
+func (r *BookingRepository) Transition(ctx context.Context, id, from, to, userID string, rec booking.Record) (booking.Booking, error) {
 	var updated booking.Booking
 	err := r.inTx(ctx, func(tx *sql.Tx) error {
 		if err := expire(ctx, tx); err != nil {
 			return err
 		}
-		// RN-01.6: o veículo só sai para nova locação com o checklist da devolução anterior aprovado.
+		// O veículo só sai se não estiver com outro cliente e, depois de uma devolução, com o
+		// checklist aprovado (RN-01.6).
 		if to == booking.StageEmLocacao {
-			var pending bool
-			if err := tx.QueryRowContext(ctx, queryChecklistPending, id).Scan(&pending); err != nil {
-				return mapError(err, booking.ErrBookingNotFound, "check pending checklist")
+			var busy string
+			if err := tx.QueryRowContext(ctx, queryVehicleBusy, id).Scan(&busy); err != nil {
+				return mapError(err, booking.ErrBookingNotFound, "check vehicle busy")
 			}
-			if pending {
+			switch busy {
+			case booking.StageEmLocacao:
+				return booking.ErrVehicleInUse
+			case booking.StageDevolvida:
 				return booking.ErrAwaitingChecklist
 			}
 		}
 		var err error
-		updated, err = scanBooking(tx.QueryRowContext(ctx, queryTransition, id, from, to))
+		updated, err = scanBooking(tx.QueryRowContext(ctx, queryTransition, id, from, to,
+			rec.DeliveredAt, rec.ReturnedAt, rec.ExtraDays, rec.ExtraCents))
 		if err != nil {
 			return mapError(err, booking.ErrStageChanged, "transition booking")
 		}
@@ -332,8 +345,10 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	var start, end time.Time
 	var checks []byte
 	var createdBy sql.NullString
+	var delivered, returned sql.NullTime
 	err := s.Scan(&b.ID, &b.VehicleID, &b.ClientName, &start, &end, &b.Place, &b.Stage, &b.Days,
-		&b.DailyRateCents, &b.TotalCents, &checks, &b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
+		&b.DailyRateCents, &b.TotalCents, &checks, &delivered, &returned, &b.ExtraDays, &b.ExtraCents,
+		&b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return b, err
 	}
@@ -342,11 +357,21 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	b.StartDate = timezone.Date(start)
 	b.EndDate = timezone.Date(end)
 	b.CreatedBy = nullable(createdBy)
+	b.DeliveredAt = localTime(delivered)
+	b.ReturnedAt = localTime(returned)
 	b.Checks = map[string]bool{}
 	if err := json.Unmarshal(checks, &b.Checks); err != nil {
 		return b, fmt.Errorf("decode checks: %w", err)
 	}
 	return b, nil
+}
+
+func localTime(t sql.NullTime) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	local := t.Time.In(timezone.Location)
+	return &local
 }
 
 func nullable(s sql.NullString) *string {
