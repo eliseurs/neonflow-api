@@ -14,6 +14,8 @@ type Repository interface {
 	SetChecks(ctx context.Context, id, stage string, checks map[string]bool) (Booking, error)
 	Transition(ctx context.Context, id, from, to, userID string) (Booking, error)
 	Available(ctx context.Context, p Period) ([]fleet.Vehicle, error)
+	// ReturnChecklist devolve as chaves dos itens ativos do checklist de devolução, em ordem (RN-01.6).
+	ReturnChecklist(ctx context.Context) ([]string, error)
 }
 
 type Service interface {

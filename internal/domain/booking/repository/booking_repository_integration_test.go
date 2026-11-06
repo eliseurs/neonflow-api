@@ -221,3 +221,56 @@ func TestBookingRepository_ConcurrentCreate(t *testing.T) {
 	}
 	assert.Equal(t, 1, ok)
 }
+
+func TestBookingRepository_ReturnChecklist(t *testing.T) {
+	database := testutil.MigratedDB(t, "../../../../sql/migrations")
+	repo := NewBookingRepository(database)
+	ctx := context.Background()
+	userID, vehicleID := seed(t, database)
+
+	// Lista inicial do fundador (RN-01.6, q56 e q80), em ordem.
+	keys, err := repo.ReturnChecklist(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"combustivel", "estetica", "oleo", "agua", "pastilhas", "pneus", "limpeza",
+		"documentos", "fotos", "quilometragem"}, keys)
+	_, err = database.ExecContext(ctx, `UPDATE checklist_items SET active = false WHERE key = 'fotos'`)
+	require.NoError(t, err)
+	keys, err = repo.ReturnChecklist(ctx)
+	require.NoError(t, err)
+	assert.NotContains(t, keys, "fotos")
+
+	first, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Primeiro",
+		Period: period(t, "2026-12-10", "2026-12-12"), CreatedBy: userID})
+	require.NoError(t, err)
+	second, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Segundo",
+		Period: period(t, "2026-12-12", "2026-12-14"), CreatedBy: userID})
+	require.NoError(t, err)
+
+	for _, step := range [][2]string{
+		{booking.StagePreparacao, booking.StageConfirmada},
+		{booking.StageConfirmada, booking.StageEmLocacao},
+		{booking.StageEmLocacao, booking.StageDevolvida},
+	} {
+		_, err := repo.Transition(ctx, first.ID, step[0], step[1], userID)
+		require.NoError(t, err)
+	}
+	_, err = repo.Transition(ctx, second.ID, booking.StagePreparacao, booking.StageConfirmada, userID)
+	require.NoError(t, err)
+
+	// RN-01.6 e RN-02.25: o carro só sai de novo com o checklist da devolução anterior aprovado.
+	_, err = repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID)
+	assert.ErrorIs(t, err, booking.ErrAwaitingChecklist)
+	still, err := repo.FindByID(ctx, second.ID)
+	require.NoError(t, err)
+	assert.Equal(t, booking.StageConfirmada, still.Stage)
+
+	_, err = repo.Transition(ctx, first.ID, booking.StageDevolvida, booking.StageEncerrada, userID)
+	require.NoError(t, err)
+	out, err := repo.Transition(ctx, second.ID, booking.StageConfirmada, booking.StageEmLocacao, userID)
+	require.NoError(t, err)
+	assert.Equal(t, booking.StageEmLocacao, out.Stage)
+
+	require.NoError(t, database.Close())
+	_, err = repo.ReturnChecklist(ctx)
+	assert.Error(t, err)
+}

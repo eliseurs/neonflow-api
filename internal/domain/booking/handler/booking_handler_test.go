@@ -133,6 +133,7 @@ func TestBookingHandler_Errors(t *testing.T) {
 		{booking.ErrStageFinal, http.StatusConflict},
 		{booking.ErrNotCancelable, http.StatusConflict},
 		{booking.ErrStageChanged, http.StatusConflict},
+		{booking.ErrAwaitingChecklist, http.StatusConflict},
 		{errors.New("db"), http.StatusInternalServerError},
 	}
 	paths := []struct{ method, path, body string }{

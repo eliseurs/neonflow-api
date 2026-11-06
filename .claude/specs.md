@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Checklist de devolução e estado do veículo
+
+- `V4_checklist`: tabela `checklist_items` com a lista inicial do fundador (RN-01.6, q56 e q80). Chave em minúsculas sem acento, única e imutável.
+- Domínio `checklist`: `GET/POST /api/checklist-items`, `PUT /api/checklist-items/:id` (admin e central). A chave sai do nome (`KeyFromLabel`) e não pode repetir uma conferência fixa da reserva (`booking.ReservedCheckKeys`).
+- Reservas: em "devolvida", `ValidateChecks` e `NextStage` recebem os itens ativos (`Repository.ReturnChecklist`), então encerrar exige `issues` e todo o checklist. `Transition` para "em_locacao" recusa com 409 (`ErrAwaitingChecklist`) se o veículo tiver outra reserva em "devolvida" (RN-01.6, RN-02.25).
+- Frota: `GET /api/vehicles` e `/:id` trazem `status` (manutencao, em_locacao, aguardando_checklist, reservado, livre) e `next_booking` (RN-01.3). "Hoje" em `America/Sao_Paulo`. Create e Update releem o veículo.
+- Testes: entidade, serviço, handler e rota do checklist; integração do checklist, do bloqueio da entrega e dos estados da frota. Cobertura de `internal/` em 95,2%.
+
+---
+
 ## [2026-11-06] — CI no GitHub Actions
 
 - `.github/workflows/ci.yml`: em todo PR e push no `main`, roda `make lint` (gofmt + `go vet`, inclusive com a tag `integration`), build de `cmd/...`, `make test-integration` com PostgreSQL 16 como serviço do job (`TEST_DATABASE_URL` aponta para ele) e `make cover`, que falha abaixo de 80% em `internal/`.

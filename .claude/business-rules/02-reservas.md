@@ -28,7 +28,7 @@
 | RN-02.22 | Transfer: se nenhum motorista aceitar a corrida, a **oferta é reaberta com valor maior para o motorista** | aprovada (05/11/2026, fundador, q59); prazo e acréscimo não informados | — | PEN-07 |
 | RN-02.23 | Horário de retirada e devolução é **livre**, combinado com a central antes da retirada | aprovada (06/11/2026, fundador, q66) | — (a API reserva só por data) | PEN-29 |
 | RN-02.24 | A diária conta **períodos de 24 horas a partir da hora da retirada**, não dias do calendário. Junto com RN-02.19: até 1 hora além do último período não cobra; passado isso, cobra mais uma diária | aprovada (06/11/2026, fundador, q67) | — (hoje `days` = diferença de datas) | PEN-29 |
-| RN-02.25 | Entre uma devolução e a próxima retirada não há intervalo fixo: o carro **pode sair no mesmo dia**, desde que o checklist de devolução esteja aprovado (RN-01.6) | aprovada (06/11/2026, fundador, q68) | — | PEN-29, PEN-18 |
+| RN-02.25 | Entre uma devolução e a próxima retirada não há intervalo fixo: o carro **pode sair no mesmo dia**, desde que o checklist de devolução esteja aprovado (RN-01.6) | implementada (06/11/2026; aprovada no mesmo dia, q68): datas adjacentes já eram permitidas, e a entrega espera a reserva anterior sair de "devolvida" | `internal/domain/booking/repository/booking_repository.go` (`queryChecklistPending`) | PEN-29, PEN-18 |
 | RN-02.26 | A central atende **24 horas, todos os dias**, por um único contato (o WhatsApp da central). Mais adiante, separa um contato de monitoramento 24h e um comercial | aprovada (06/11/2026, fundador, q69) | — | PEN-29, PEN-66 |
 | RN-02.27 | Transfer: a corrida chega ao motorista **pelo WhatsApp, avisado pela central, e pelo painel ou app do motorista**. No início, de 2 a 5 motoristas | aprovada (06/11/2026, fundador, q83 e q84) | — | PEN-07 |
 
@@ -55,7 +55,7 @@ stateDiagram-v2
 | Preparação | 0 | `cnh`, `contract`, `deposit` + pagamento |
 | Confirmada | 1 | `out` (entrega) |
 | Em locação | 2 | `back` (devolução) |
-| Devolvida | 3 | `issues` (ocorrências) |
+| Devolvida | 3 | `issues` (ocorrências) + itens ativos do checklist de devolução (RN-01.6) |
 | Encerrada | 4 | — |
 | Cancelada | −1 | — |
 

@@ -77,6 +77,22 @@ func TestNextStage(t *testing.T) {
 	assert.ErrorIs(t, err, ErrStageFinal)
 }
 
+func TestChecklistExtras(t *testing.T) {
+	// RN-01.6: em "devolvida", os itens do checklist entram nas conferências exigidas.
+	items := []string{"combustivel", "pneus"}
+	assert.NoError(t, ValidateChecks(StageDevolvida, map[string]bool{"issues": true, "pneus": true}, items...))
+	assert.ErrorIs(t, ValidateChecks(StageDevolvida, map[string]bool{"oleo": true}, items...), ErrInvalidCheck)
+
+	_, err := NextStage(StageDevolvida, map[string]bool{"issues": true, "combustivel": true}, items...)
+	assert.ErrorIs(t, err, ErrChecksPending)
+	assert.Contains(t, err.Error(), "pneus")
+	next, err := NextStage(StageDevolvida, map[string]bool{"issues": true, "combustivel": true, "pneus": true}, items...)
+	require.NoError(t, err)
+	assert.Equal(t, StageEncerrada, next)
+
+	assert.ElementsMatch(t, []string{"cnh", "terms", "deposit", "payment", "delivery", "return", "issues"}, ReservedCheckKeys())
+}
+
 func TestCancelable(t *testing.T) {
 	assert.True(t, Cancelable(StagePreparacao))
 	assert.True(t, Cancelable(StageConfirmada))

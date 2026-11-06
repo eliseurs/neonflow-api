@@ -128,9 +128,29 @@ func (r CreateRequest) Validate(userID string) (NewBooking, error) {
 	return n, nil
 }
 
-// ValidateChecks aceita só as conferências da etapa atual.
-func ValidateChecks(stage string, checks map[string]bool) error {
-	allowed, ok := requiredChecks[stage]
+// ReservedCheckKeys lista as conferências fixas de todas as etapas. Itens do checklist de
+// devolução não podem usar essas chaves.
+func ReservedCheckKeys() []string {
+	var keys []string
+	for _, stage := range []string{StagePreparacao, StageConfirmada, StageEmLocacao, StageDevolvida} {
+		keys = append(keys, requiredChecks[stage]...)
+	}
+	return keys
+}
+
+// stageChecks junta as conferências fixas da etapa às extras: em "devolvida", os itens ativos
+// do checklist de devolução (RN-01.6).
+func stageChecks(stage string, extra []string) ([]string, bool) {
+	fixed, ok := requiredChecks[stage]
+	if !ok {
+		return nil, false
+	}
+	return append(append([]string{}, fixed...), extra...), true
+}
+
+// ValidateChecks aceita só as conferências da etapa atual (fixas e extras).
+func ValidateChecks(stage string, checks map[string]bool, extra ...string) error {
+	allowed, ok := stageChecks(stage, extra)
 	if !ok {
 		return ErrStageFinal
 	}
@@ -145,14 +165,15 @@ func ValidateChecks(stage string, checks map[string]bool) error {
 	return nil
 }
 
-// NextStage devolve a etapa seguinte se todas as conferências da atual estiverem feitas (RN-02.4).
-func NextStage(stage string, checks map[string]bool) (string, error) {
+// NextStage devolve a etapa seguinte se todas as conferências da atual, fixas e extras, estiverem feitas (RN-02.4).
+func NextStage(stage string, checks map[string]bool, extra ...string) (string, error) {
 	next, ok := nextStage[stage]
 	if !ok {
 		return "", ErrStageFinal
 	}
+	required, _ := stageChecks(stage, extra)
 	var missing []string
-	for _, key := range requiredChecks[stage] {
+	for _, key := range required {
 		if !checks[key] {
 			missing = append(missing, key)
 		}
