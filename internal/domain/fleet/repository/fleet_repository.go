@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -15,28 +16,47 @@ const (
 	uniqueViolation           = "23505"
 	invalidTextRepresentation = "22P02"
 
-	vehicleColumns = `id, plate, name, category, owner, seats, gear, daily_rate_cents, in_maintenance, created_at, updated_at`
+	dateLayout = "2006-01-02"
 
-	queryList = `
-		SELECT ` + vehicleColumns + `
-		FROM vehicles
-		ORDER BY name, plate
+	// queryVehicles traz o veículo com o estado exibido e a próxima reserva (RN-01.1, RN-01.3, RN-01.6).
+	// "Hoje" é o dia em Gramado (fuso America/Sao_Paulo, suposição técnica registrada em RN-02).
+	// A pré-reserva vencida e não paga não conta, mesmo antes de a rotina de expiração cancelá-la (RN-02.11).
+	queryVehicles = `
+		SELECT v.id, v.plate, v.name, v.category, v.owner, v.seats, v.gear, v.daily_rate_cents,
+		       v.in_maintenance, v.created_at, v.updated_at,
+		       CASE
+		           WHEN v.in_maintenance THEN 'manutencao'
+		           WHEN EXISTS (SELECT 1 FROM bookings b WHERE b.vehicle_id = v.id AND b.stage = 'em_locacao') THEN 'em_locacao'
+		           WHEN EXISTS (SELECT 1 FROM bookings b WHERE b.vehicle_id = v.id AND b.stage = 'devolvida') THEN 'aguardando_checklist'
+		           WHEN nb.id IS NOT NULL THEN 'reservado'
+		           ELSE 'livre'
+		       END,
+		       nb.id, nb.client_name, nb.start_date, nb.end_date, nb.stage
+		FROM vehicles v
+		LEFT JOIN LATERAL (
+		    SELECT b.id, b.client_name, b.start_date, b.end_date, b.stage
+		    FROM bookings b
+		    WHERE b.vehicle_id = v.id
+		      AND (b.stage = 'confirmada'
+		           OR (b.stage = 'preparacao'
+		               AND (b.expires_at > now() OR coalesce((b.checks->>'payment')::boolean, false))))
+		      AND b.end_date > (now() AT TIME ZONE 'America/Sao_Paulo')::date
+		    ORDER BY b.start_date, b.created_at
+		    LIMIT 1
+		) nb ON true
 	`
-	queryFindByID = `
-		SELECT ` + vehicleColumns + `
-		FROM vehicles
-		WHERE id = $1
-	`
-	queryCreate = `
+	queryList     = queryVehicles + ` ORDER BY v.name, v.plate`
+	queryFindByID = queryVehicles + ` WHERE v.id = $1`
+	queryCreate   = `
 		INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents, in_maintenance)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING ` + vehicleColumns
+		RETURNING id`
 	queryUpdate = `
 		UPDATE vehicles
 		SET plate = $2, name = $3, category = $4, owner = $5, seats = $6, gear = $7,
 		    daily_rate_cents = $8, in_maintenance = $9, updated_at = now()
 		WHERE id = $1
-		RETURNING ` + vehicleColumns
+		RETURNING id`
 )
 
 type scanner interface {
@@ -77,23 +97,47 @@ func (r *FleetRepository) FindByID(ctx context.Context, id string) (fleet.Vehicl
 	return v, mapError(err, "find vehicle")
 }
 
+// Create e Update devolvem o veículo relido, já com o estado calculado.
 func (r *FleetRepository) Create(ctx context.Context, n fleet.VehicleRequest) (fleet.Vehicle, error) {
-	v, err := scanVehicle(r.db.QueryRowContext(ctx, queryCreate,
-		n.Plate, n.Name, n.Category, n.Owner, n.Seats, n.Gear, n.DailyRateCents, n.InMaintenance))
-	return v, mapError(err, "create vehicle")
+	var id string
+	err := r.db.QueryRowContext(ctx, queryCreate,
+		n.Plate, n.Name, n.Category, n.Owner, n.Seats, n.Gear, n.DailyRateCents, n.InMaintenance).Scan(&id)
+	if err := mapError(err, "create vehicle"); err != nil {
+		return fleet.Vehicle{}, err
+	}
+	return r.FindByID(ctx, id)
 }
 
 func (r *FleetRepository) Update(ctx context.Context, id string, n fleet.VehicleRequest) (fleet.Vehicle, error) {
-	v, err := scanVehicle(r.db.QueryRowContext(ctx, queryUpdate,
-		id, n.Plate, n.Name, n.Category, n.Owner, n.Seats, n.Gear, n.DailyRateCents, n.InMaintenance))
-	return v, mapError(err, "update vehicle")
+	err := r.db.QueryRowContext(ctx, queryUpdate,
+		id, n.Plate, n.Name, n.Category, n.Owner, n.Seats, n.Gear, n.DailyRateCents, n.InMaintenance).Scan(&id)
+	if err := mapError(err, "update vehicle"); err != nil {
+		return fleet.Vehicle{}, err
+	}
+	return r.FindByID(ctx, id)
 }
 
 func scanVehicle(s scanner) (fleet.Vehicle, error) {
 	var v fleet.Vehicle
+	var nbID, nbClient, nbStage sql.NullString
+	var nbStart, nbEnd sql.NullTime
 	err := s.Scan(&v.ID, &v.Plate, &v.Name, &v.Category, &v.Owner, &v.Seats, &v.Gear,
-		&v.DailyRateCents, &v.InMaintenance, &v.CreatedAt, &v.UpdatedAt)
-	return v, err
+		&v.DailyRateCents, &v.InMaintenance, &v.CreatedAt, &v.UpdatedAt,
+		&v.Status, &nbID, &nbClient, &nbStart, &nbEnd, &nbStage)
+	if err != nil {
+		return v, err
+	}
+	if nbID.Valid {
+		v.NextBooking = &fleet.NextBooking{
+			ID: nbID.String, ClientName: nbClient.String, Stage: nbStage.String,
+			StartDate: formatDate(nbStart.Time), EndDate: formatDate(nbEnd.Time),
+		}
+	}
+	return v, nil
+}
+
+func formatDate(t time.Time) string {
+	return t.Format(dateLayout)
 }
 
 // mapError traduz linha inexistente e id mal formatado em ErrVehicleNotFound e placa repetida em ErrPlateTaken.

@@ -129,7 +129,8 @@ func statusFor(err error) int {
 		return http.StatusBadRequest
 	case errors.Is(err, booking.ErrVehicleInMaintenance), errors.Is(err, booking.ErrPeriodUnavailable),
 		errors.Is(err, booking.ErrChecksPending), errors.Is(err, booking.ErrStageFinal),
-		errors.Is(err, booking.ErrNotCancelable), errors.Is(err, booking.ErrStageChanged):
+		errors.Is(err, booking.ErrNotCancelable), errors.Is(err, booking.ErrStageChanged),
+		errors.Is(err, booking.ErrAwaitingChecklist):
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError

@@ -16,4 +16,5 @@ var (
 	ErrStageFinal           = errors.New("reserva encerrada ou cancelada não muda de etapa")
 	ErrNotCancelable        = errors.New("só reservas em preparação ou confirmadas podem ser canceladas")
 	ErrStageChanged         = errors.New("a reserva mudou de etapa; recarregue e tente de novo")
+	ErrAwaitingChecklist    = errors.New("o veículo aguarda o checklist de devolução de outra reserva")
 )

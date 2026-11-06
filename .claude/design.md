@@ -34,6 +34,7 @@ internal/
     authentication/         # login, me, criação de usuário (CLI)
     fleet/                  # veículos (RN-01)
     booking/                # reservas, disponibilidade e histórico (RN-02)
+    checklist/              # itens do checklist de devolução, configuráveis (RN-01.6)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -60,8 +61,8 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/health`, `/api/health` | — | 200 com banco ok, 503 sem banco |
 | POST | `/api/auth/login` | — | `{email, password}` → `{token, expires_at, user}` |
 | GET | `/api/auth/me` | JWT | Usuário do token |
-| GET | `/api/vehicles` | admin, central | Lista a frota |
-| GET | `/api/vehicles/:id` | admin, central | Um veículo |
+| GET | `/api/vehicles` | admin, central | Lista a frota, com `status` (`manutencao`, `em_locacao`, `aguardando_checklist`, `reservado`, `livre`) e `next_booking` (RN-01.3) |
+| GET | `/api/vehicles/:id` | admin, central | Um veículo, com `status` e `next_booking` |
 | POST | `/api/vehicles` | admin, central | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance`) |
 | PUT | `/api/vehicles/:id` | admin, central | Substitui todos os campos (inclusive manutenção) |
 | GET | `/api/availability?start_date=&end_date=` | admin, central | Veículos fora de manutenção e sem reserva ativa no período |
@@ -72,8 +73,13 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PATCH | `/api/bookings/:id/checks` | admin, central | Marca conferências da etapa atual (`{"cnh": true}`) |
 | POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas |
 | POST | `/api/bookings/:id/cancel` | admin, central | Cancela (preparação ou confirmada) e libera o período |
+| GET | `/api/checklist-items` | admin, central | Itens do checklist de devolução, em ordem (ativos e inativos) |
+| POST | `/api/checklist-items` | admin, central | Novo item (`label`, `position`, `active`); a chave sai do nome e não muda |
+| PUT | `/api/checklist-items/:id` | admin, central | Troca `label`, `position` e `active` (ausente mantém) |
 
-Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada).
+Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva).
+
+Em "devolvida", as conferências exigidas são `issues` mais as chaves dos itens ativos do checklist. Uma reserva não vai para "em locação" enquanto o mesmo veículo tiver outra em "devolvida" (RN-01.6).
 
 ---
 
@@ -109,7 +115,14 @@ bookings
     WHERE (stage NOT IN ('encerrada','cancelada'))   -- btree_gist (RN-02.1/02.2)
 
 booking_events (booking_id FK, from_stage, to_stage, user_id NULL = automático, created_at)
+
+checklist_items (V4)                    -- checklist de devolução (RN-01.6)
+  id, key TEXT UNIQUE CHECK ^[a-z0-9_]{1,40}$ (não muda), label, position INT, active BOOL
+  -- lista inicial do fundador: combustível, estética, óleo, água, pastilhas, pneus,
+  -- limpeza interna, documentos, fotos, quilometragem
 ```
+
+O estado do veículo é calculado na leitura da frota, sem coluna: manutenção > em locação > aguardando checklist (reserva em "devolvida") > reservado (confirmada ou pré-reserva no prazo que ainda não terminou) > livre. "Hoje" é o dia em `America/Sao_Paulo`.
 
 A expiração roda dentro de cada operação de reserva (mesma conexão ou transação), antes de ler ou gravar. Não há job em segundo plano: uma pré-reserva vencida fica `preparacao` no banco até a próxima chamada, mas nunca é vista assim pela API.
 

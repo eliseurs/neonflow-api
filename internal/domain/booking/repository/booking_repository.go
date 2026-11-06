@@ -74,6 +74,19 @@ const (
 		SET stage = $3, updated_at = now()
 		WHERE id = $1 AND stage = $2
 		RETURNING ` + bookingColumns
+	// queryChecklistPending: outra reserva do mesmo veículo devolvida e sem checklist aprovado (RN-01.6).
+	queryChecklistPending = `
+		SELECT EXISTS (
+			SELECT 1 FROM bookings other
+			JOIN bookings b ON b.vehicle_id = other.vehicle_id
+			WHERE b.id = $1 AND other.id <> b.id AND other.stage = 'devolvida'
+		)
+	`
+	queryReturnChecklist = `
+		SELECT key FROM checklist_items
+		WHERE active
+		ORDER BY position, label
+	`
 	queryInsertEvent = `
 		INSERT INTO booking_events (booking_id, from_stage, to_stage, user_id)
 		VALUES ($1, NULLIF($2, ''), $3, NULLIF($4, '')::uuid)
@@ -218,6 +231,16 @@ func (r *BookingRepository) Transition(ctx context.Context, id, from, to, userID
 		if err := expire(ctx, tx); err != nil {
 			return err
 		}
+		// RN-01.6: o veículo só sai para nova locação com o checklist da devolução anterior aprovado.
+		if to == booking.StageEmLocacao {
+			var pending bool
+			if err := tx.QueryRowContext(ctx, queryChecklistPending, id).Scan(&pending); err != nil {
+				return mapError(err, booking.ErrBookingNotFound, "check pending checklist")
+			}
+			if pending {
+				return booking.ErrAwaitingChecklist
+			}
+		}
 		var err error
 		updated, err = scanBooking(tx.QueryRowContext(ctx, queryTransition, id, from, to))
 		if err != nil {
@@ -251,6 +274,27 @@ func (r *BookingRepository) Available(ctx context.Context, p booking.Period) ([]
 		return nil, fmt.Errorf("available vehicles: %w", err)
 	}
 	return vehicles, nil
+}
+
+func (r *BookingRepository) ReturnChecklist(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, queryReturnChecklist)
+	if err != nil {
+		return nil, fmt.Errorf("return checklist: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+
+	keys := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, fmt.Errorf("scan checklist key: %w", err)
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("return checklist: %w", err)
+	}
+	return keys, nil
 }
 
 func (r *BookingRepository) inTx(ctx context.Context, fn func(tx *sql.Tx) error) error {

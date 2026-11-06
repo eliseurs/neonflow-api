@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,6 +21,12 @@ type fakeRepo struct {
 	checks     map[string]bool
 	transition transition
 	period     booking.Period
+	items      []string
+	itemsErr   error
+}
+
+func (f *fakeRepo) ReturnChecklist(context.Context) ([]string, error) {
+	return f.items, f.itemsErr
 }
 
 func (f *fakeRepo) List(context.Context, string) ([]booking.Booking, error) {
@@ -127,6 +134,32 @@ func TestBookingService_Advance(t *testing.T) {
 	repo.findErr = booking.ErrBookingNotFound
 	_, err = svc.Advance(ctx, "x", "u1")
 	assert.ErrorIs(t, err, booking.ErrBookingNotFound)
+}
+
+func TestBookingService_ReturnChecklist(t *testing.T) {
+	ctx := context.Background()
+	repo := &fakeRepo{
+		current: booking.Booking{ID: "b1", Stage: booking.StageDevolvida, Checks: map[string]bool{"issues": true}},
+		items:   []string{"combustivel", "pneus"},
+	}
+	svc := NewBookingService(repo)
+
+	// RN-01.6: os itens do checklist são aceitos e exigidos em "devolvida".
+	_, err := svc.SetChecks(ctx, "b1", map[string]bool{"pneus": true})
+	require.NoError(t, err)
+	_, err = svc.Advance(ctx, "b1", "u1")
+	assert.ErrorIs(t, err, booking.ErrChecksPending)
+
+	repo.current.Checks = map[string]bool{"issues": true, "combustivel": true, "pneus": true}
+	b, err := svc.Advance(ctx, "b1", "u1")
+	require.NoError(t, err)
+	assert.Equal(t, booking.StageEncerrada, b.Stage)
+
+	repo.itemsErr = errors.New("db")
+	_, err = svc.SetChecks(ctx, "b1", map[string]bool{"pneus": true})
+	assert.Error(t, err)
+	_, err = svc.Advance(ctx, "b1", "u1")
+	assert.Error(t, err)
 }
 
 func TestBookingService_Cancel(t *testing.T) {

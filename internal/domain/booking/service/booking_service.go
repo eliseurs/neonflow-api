@@ -41,7 +41,11 @@ func (s *BookingService) SetChecks(ctx context.Context, id string, checks map[st
 	if err != nil {
 		return booking.Booking{}, err
 	}
-	if err := booking.ValidateChecks(b.Stage, checks); err != nil {
+	extra, err := s.extraChecks(ctx, b.Stage)
+	if err != nil {
+		return booking.Booking{}, err
+	}
+	if err := booking.ValidateChecks(b.Stage, checks, extra...); err != nil {
 		return booking.Booking{}, err
 	}
 	return s.repo.SetChecks(ctx, id, b.Stage, checks)
@@ -53,11 +57,24 @@ func (s *BookingService) Advance(ctx context.Context, id, userID string) (bookin
 	if err != nil {
 		return booking.Booking{}, err
 	}
-	next, err := booking.NextStage(b.Stage, b.Checks)
+	extra, err := s.extraChecks(ctx, b.Stage)
+	if err != nil {
+		return booking.Booking{}, err
+	}
+	next, err := booking.NextStage(b.Stage, b.Checks, extra...)
 	if err != nil {
 		return booking.Booking{}, err
 	}
 	return s.repo.Transition(ctx, id, b.Stage, next, userID)
+}
+
+// extraChecks: na etapa "devolvida", o checklist de devolução configurado pela central entra
+// nas conferências exigidas para encerrar (RN-01.6).
+func (s *BookingService) extraChecks(ctx context.Context, stage string) ([]string, error) {
+	if stage != booking.StageDevolvida {
+		return nil, nil
+	}
+	return s.repo.ReturnChecklist(ctx)
 }
 
 // Cancel libera o período (RN-02.5). Multa e estorno (RN-02.21, RN-03.3) ainda não são calculados aqui.
