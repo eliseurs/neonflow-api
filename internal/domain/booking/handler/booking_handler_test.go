@@ -143,6 +143,7 @@ func TestBookingHandler_Errors(t *testing.T) {
 		{booking.ErrKmRequired, http.StatusBadRequest},
 		{booking.ErrInvalidKm, http.StatusBadRequest},
 		{booking.ErrKmBeforeDelivery, http.StatusBadRequest},
+		{booking.ErrReferrerNotFound, http.StatusBadRequest},
 		{booking.ErrFutureTime, http.StatusBadRequest},
 		{booking.ErrReturnBeforeDelivery, http.StatusBadRequest},
 		{errors.New("db"), http.StatusInternalServerError},

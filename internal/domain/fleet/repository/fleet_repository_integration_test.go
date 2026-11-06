@@ -49,6 +49,20 @@ func TestFleetRepository_Integration(t *testing.T) {
 	assert.Equal(t, 200, *withKm.KmLimitPerDay)
 	assert.Equal(t, int64(150), *withKm.ExtraKmCents)
 
+	// Proprietário parceiro (RN-07.4): FK para partners; inexistente é recusado.
+	var partnerID string
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO partners (name, is_owner, referral_code) VALUES ('Parceiro Teste', true, 'OWN234') RETURNING id`).Scan(&partnerID))
+	req.OwnerPartnerID = &partnerID
+	owned, err := repo.Update(ctx, created.ID, req)
+	require.NoError(t, err)
+	assert.Equal(t, partnerID, *owned.OwnerPartnerID)
+	missing := "00000000-0000-0000-0000-000000000000"
+	req.OwnerPartnerID = &missing
+	_, err = repo.Update(ctx, created.ID, req)
+	assert.ErrorIs(t, err, fleet.ErrOwnerPartnerNotFound)
+	req.OwnerPartnerID = nil
+
 	req.DepositCents, req.KmLimitPerDay, req.ExtraKmCents = nil, nil, nil
 	req.InMaintenance = true
 	req.DailyRateCents = 12000

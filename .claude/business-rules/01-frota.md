@@ -32,7 +32,8 @@ classDiagram
         +string Plate
         +string Name
         +string Category
-        +string Owner
+                +string Owner
+        +UUID OwnerPartnerID
         +int Seats
         +string Gear
         +int DailyRateCents
