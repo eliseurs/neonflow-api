@@ -1,6 +1,6 @@
 # ADR-0014 — Onde guardar as fotos dos veículos
 
-- **Status:** proposta
+- **Status:** aceita (06/11/2026)
 - **Data:** 06/11/2026
 - **Decisores:** time de engenharia, com aprovação do responsável pelo projeto
 - **Relacionados:** RN-01.7, PEN-65, ADR-0008, ADR-0009
@@ -25,11 +25,13 @@ O fundador decidiu que o cadastro do veículo aceita fotos e que o site usa imag
 
 ## Decisão
 
-Recomendação, ainda não decidida: **opção 2, com Cloudflare R2.**
+**Opção 2, armazenamento compatível com S3**, aprovada pelo responsável em 06/11/2026: "pode por hora guardar arquivos em um bucket no railway depois faço migração para cloudflare r2".
 
-- O arquivo não passa pela API nem ocupa o banco; o site carrega a foto da CDN.
-- R2 não cobra transferência de saída, e o volume atual cabe na faixa gratuita.
-- Exige uma conta Cloudflare, um bucket e três variáveis de ambiente (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) no Railway, e **uma dependência nova** na API para assinar as URLs (`aws-sdk-go-v2/service/s3` ou `minio-go`). Pela regra do projeto, a dependência nova precisa de aprovação.
+- **Agora:** bucket privado do Railway (`neonflow-arquivos`, região US East, ambiente hml), criado pela CLI.
+- **Depois:** Cloudflare R2. A troca é só de variáveis, porque o código fala S3 (`STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`), mais copiar os objetos para o novo bucket.
+- **Dependência aprovada:** `github.com/minio/minio-go/v7` (Apache 2.0), só o cliente S3.
+- **Diferença da recomendação inicial:** o envio passa pela API (multipart), que confere tipo pelo conteúdo e tamanho (10 MB) antes de gravar; a leitura é por link assinado de 15 minutos. O bucket é privado, inclusive para as fotos da reserva, que mostram placas e o estado do carro de cada cliente.
+- **Sem variáveis:** a API sobe normalmente e o envio responde 503 "armazenamento de arquivos não configurado" (ambiente local).
 
 ## Consequências
 

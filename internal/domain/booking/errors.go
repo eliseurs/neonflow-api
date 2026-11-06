@@ -27,4 +27,5 @@ var (
 	ErrKmBeforeDelivery     = errors.New("a quilometragem da devolução não pode ser menor que a da entrega")
 	ErrReferrerNotFound     = errors.New("parceiro indicador não encontrado")
 	ErrCustomerNotFound     = errors.New("cliente não encontrado")
+	ErrPhotosRequired       = errors.New("envie ao menos uma foto da devolução antes de marcar o item Fotos")
 )

@@ -41,6 +41,8 @@ internal/
         dashboard/              # indicadores da tela inicial: faturamento do mês e ocupação (PEN-11)
         transfer/               # transfer operado pela central: oferta, aceite, desistência, conclusão (RN-02.9 a 02.31)
     customer/               # clientes: contato, idioma, histórico e anonimização (RN-04.7, RN-04.8)
+    photo/                  # fotos do veículo e da reserva no bucket privado (RN-01.6, RN-01.7, ADR-0014)
+    terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -99,6 +101,13 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/customers/:id` | admin, central | Cliente e histórico de reservas e transfers |
 | POST, PUT | `/api/customers`, `/api/customers/:id` | admin, central | `name`, `whatsapp` (único), `email`, `language` (pt\|en), `notes`. 409 se o WhatsApp já existe ou o cliente foi anonimizado |
 | POST | `/api/customers/:id/anonymize` | admin | Apaga nome e contatos, também nos pedidos (LGPD) |
+| GET, POST | `/api/vehicles/:id/photos` | admin, central | Fotos do veículo; envio em multipart (`file`, JPEG/PNG/WebP, até 10 MB). Cada foto traz `url` assinada por 15 min |
+| GET, POST | `/api/bookings/:id/photos?stage=entrega\|devolucao` | admin, central | Fotos da reserva por etapa; entrega em confirmada/em locação, devolução em locação/devolvida (409 fora disso) |
+| DELETE | `/api/photos/:id`; POST `/api/photos/:id/cover` | admin, central | Apaga do bucket e do banco; capa do veículo |
+| GET | `/api/terms`; POST `/api/terms` | admin, central; POST só admin | Versões dos termos; publicar cria a próxima versão |
+| POST | `/api/bookings/:id/terms-link` | admin, central | Link de aceite (7 dias; só o hash no banco). 409 sem termos ou depois da retirada |
+| GET | `/api/bookings/:id/terms` | admin, central | Último aceite (`null` se não houve) |
+| GET, POST | `/api/public/terms/:token`, `/api/public/terms/:token/accept` | sem login | Página do cliente: resumo da reserva e termos atuais; aceite com `typed_name` e a `version` lida (409 se mudou) |
 | GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
 | POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
 | GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
@@ -141,6 +150,14 @@ vehicles
     daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
       deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
+
+photos (V16)                            -- RN-01.6, RN-01.7; arquivo no bucket privado (ADR-0014)
+  id, owner_type CHECK (veiculo|reserva), owner_id, stage ('' no veículo; entrega|devolucao na reserva)
+  storage_key UNIQUE, content_type (jpeg|png|webp), size_bytes, position, created_by, created_at
+
+terms_versions (V17): id, version UNIQUE, body, created_by, created_at        -- RN-02.3
+terms_links (V17): id, booking_id FK, token_hash UNIQUE, expires_at, created_by
+terms_acceptances (V17): id, booking_id FK, version_id FK, link_id FK, typed_name, accepted_at
 
 customers (V15)                         -- RN-04.7, RN-04.8; sem documentos (PEN-48)
   id, name, whatsapp (dígitos, UNIQUE quando preenchido), email, language CHECK (pt|en), notes

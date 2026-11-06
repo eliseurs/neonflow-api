@@ -13,10 +13,13 @@ import (
 	fleetRoute "neonflow-api/internal/domain/fleet/route"
 	partnerRoute "neonflow-api/internal/domain/partner/route"
 	payoutRoute "neonflow-api/internal/domain/payout/route"
+	photoRoute "neonflow-api/internal/domain/photo/route"
+	termsRoute "neonflow-api/internal/domain/terms/route"
 	transferRoute "neonflow-api/internal/domain/transfer/route"
 	userRoute "neonflow-api/internal/domain/user/route"
 	"neonflow-api/internal/infra/api"
 	"neonflow-api/internal/infra/db"
+	"neonflow-api/internal/infra/storage"
 	"neonflow-api/internal/pkg/logger"
 )
 
@@ -36,6 +39,15 @@ func main() {
 	}
 	defer database.Close() //nolint:errcheck
 
+	store, err := storage.New(cfg.Storage)
+	if err != nil {
+		log.Error("storage unavailable", "error", err)
+		os.Exit(1)
+	}
+	if !cfg.Storage.Enabled() {
+		log.Info("storage not configured: photo uploads disabled")
+	}
+
 	app := api.New(cfg, database, log)
 	app.Setup()
 	app.HealthCheck()
@@ -50,6 +62,8 @@ func main() {
 	dashboardRoute.Register(app)
 	transferRoute.Register(app)
 	customerRoute.Register(app)
+	photoRoute.Register(app, store)
+	termsRoute.Register(app)
 
 	app.Server()
 }

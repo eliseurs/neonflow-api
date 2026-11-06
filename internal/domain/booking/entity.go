@@ -41,6 +41,9 @@ const (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// PhotosCheck é a chave do item "Fotos" do checklist de devolução (V4): só marca com foto enviada.
+const PhotosCheck = "fotos"
+
 // Conferências exigidas para sair de cada etapa (RN-02.3, RN-02.4). "payment" é o pagamento
 // integral confirmado pela central (RN-02.14); "terms" é o aceite dos termos (ADR-0013).
 var requiredChecks = map[string][]string{

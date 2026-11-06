@@ -50,6 +50,16 @@ func (s *BookingService) SetChecks(ctx context.Context, id string, checks map[st
 	if err := booking.ValidateChecks(b.Stage, checks, extra...); err != nil {
 		return booking.Booking{}, err
 	}
+	// "Fotos obrigatórias" (q80): o item só é marcado com ao menos uma foto da devolução enviada.
+	if checks[booking.PhotosCheck] && b.Stage == booking.StageDevolvida {
+		n, err := s.repo.ReturnPhotos(ctx, id)
+		if err != nil {
+			return booking.Booking{}, err
+		}
+		if n == 0 {
+			return booking.Booking{}, booking.ErrPhotosRequired
+		}
+	}
 	return s.repo.SetChecks(ctx, id, b.Stage, checks)
 }
 
