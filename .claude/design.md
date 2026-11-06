@@ -38,7 +38,8 @@ internal/
         user/                   # gestão de usuários pelo admin e troca da própria senha (RN-05.7)
         partner/                # parceiros: proprietário, motorista, indicador; código de indicação (RN-07)
         payout/                 # comissão do indicador e repasse ao dono, gerados no encerramento (RN-03.12, RN-03.13)
-    dashboard/              # indicadores da tela inicial: faturamento do mês e ocupação (PEN-11)
+        dashboard/              # indicadores da tela inicial: faturamento do mês e ocupação (PEN-11)
+    transfer/               # transfer operado pela central: oferta, aceite, desistência, conclusão (RN-02.9 a 02.31)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -93,6 +94,15 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PUT | `/api/partners/:id` | admin, central | Substitui os dados (o código não muda); `active` ausente mantém |
 | GET | `/api/payouts?kind=&status=&partner_id=` | admin, central | Comissões (`comissao`) e repasses (`repasse`); `status` pendente ou paga |
 | POST | `/api/payouts/:id/pay` | admin, central | Marca como pago (data e quem marcou). 409 se já pago ou sem percentual |
+| GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
+| POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
+| GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
+| POST | `/api/transfers/:id/offer` | admin, central | Abre ou reabre a oferta (`offer_cents`, `minutes`); não diminui. Só em aguardando_motorista |
+| POST | `/api/transfers/:id/accept` | admin, central | Registra o motorista (`driver_partner_id`, ativo e motorista); exige oferta |
+| POST | `/api/transfers/:id/release` | admin, central | Motorista desistiu: volta para aguardando, sem penalidade |
+| PATCH | `/api/transfers/:id/paid` | admin, central | `{paid}` marca ou desmarca o pagamento do cliente |
+| POST | `/api/transfers/:id/start`, `/complete` | admin, central | Inicia; conclui (`extra_wait_cents`, exige pagamento) e gera os pagamentos a parceiros |
+| POST | `/api/transfers/:id/cancel` | admin, central | `{flight_cancelled}`; multa de 50% dentro de 24h (RN-02.10). Só antes de iniciar |
 | GET | `/api/dashboard?month=AAAA-MM` | admin, central | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
@@ -125,8 +135,18 @@ vehicles
       deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
 
-partner_payouts (V11)                   -- RN-03.12, RN-03.13; gerados ao encerrar a reserva
-  id, booking_id FK, partner_id FK, kind CHECK (comissao|repasse), UNIQUE (booking_id, kind)
+transfers (V13)                         -- RN-02.9 a 02.31
+  id, client_name, pickup_at, origin, destination, flight, passengers 1..60, notes
+  price_cents > 0                       -- sob consulta, combinado pela central
+  stage CHECK (aguardando_motorista|com_motorista|em_andamento|concluido|cancelado)
+  offer_cents, offer_expires_at         -- oferta aberta (juntos); fecha no aceite
+  driver_partner_id FK partners, driver_cents   -- motorista e valor aceito (juntos)
+  paid_at, extra_wait_cents, cancel_fee_cents, flight_cancelled, referred_by_partner_id FK, created_by FK
+transfer_events (transfer_id FK, action, detail, user_id, created_at)
+
+partner_payouts (V11, V13)              -- RN-03.12 a 03.14; gerados ao encerrar a reserva ou concluir o transfer
+  id, booking_id FK NULL, transfer_id FK NULL (um dos dois), partner_id FK
+  kind CHECK (comissao|repasse|motorista), UNIQUE (booking_id, kind), UNIQUE (transfer_id, kind)
   base_cents                            -- comissao: diárias; repasse: diárias + atraso + km
   percent_bp, amount_cents NULL         -- cópia do parceiro no encerramento; nulo = a definir (copiado no pagamento)
   paid_at, paid_by FK users, created_at

@@ -16,6 +16,7 @@ func TestAmount(t *testing.T) {
 func TestFilterValidate(t *testing.T) {
 	assert.NoError(t, Filter{}.Validate())
 	assert.NoError(t, Filter{Kind: KindOwnerShare, Status: StatusPaid}.Validate())
+	assert.NoError(t, Filter{Kind: KindDriver}.Validate())
 	assert.ErrorIs(t, Filter{Kind: "bonus"}.Validate(), ErrInvalidFilter)
 	assert.ErrorIs(t, Filter{Status: "atrasada"}.Validate(), ErrInvalidFilter)
 }
