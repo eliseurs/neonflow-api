@@ -8,6 +8,14 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Indicadores da tela inicial (PEN-11, q97, q98)
+
+- `V12_bookings_paid_at`: `bookings.paid_at`. Marcar a conferência `payment` grava a data (só na primeira vez); desmarcar apaga. Reservas já pagas recebem a data da confirmação (aproximação). Vem na resposta da reserva.
+- Domínio `dashboard`: `GET /api/dashboard?month=AAAA-MM` (admin e central). Retiradas no mês: diárias + atraso + km das reservas confirmadas em diante com retirada no mês (Gramado). Pago no mês: diárias das reservas com `paid_at` no mês, sem canceladas. Ocupação: carros com reserva em locação agora ÷ veículos cadastrados.
+- Limite: atraso e km cobrados depois da devolução não têm data de pagamento própria; entram no "retiradas no mês", não no "pago no mês".
+
+---
+
 ## [2026-11-06] — Comissão do indicador e repasse ao proprietário
 
 - `V11_partner_payouts`: tabela `partner_payouts` (tipo `comissao` ou `repasse`, base, percentual copiado do parceiro, valor, pago em/por), uma por tipo e reserva; preenche as reservas já encerradas.

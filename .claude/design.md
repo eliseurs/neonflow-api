@@ -37,7 +37,8 @@ internal/
         checklist/              # itens do checklist de devolução, configuráveis (RN-01.6)
         user/                   # gestão de usuários pelo admin e troca da própria senha (RN-05.7)
         partner/                # parceiros: proprietário, motorista, indicador; código de indicação (RN-07)
-    payout/                 # comissão do indicador e repasse ao dono, gerados no encerramento (RN-03.12, RN-03.13)
+        payout/                 # comissão do indicador e repasse ao dono, gerados no encerramento (RN-03.12, RN-03.13)
+    dashboard/              # indicadores da tela inicial: faturamento do mês e ocupação (PEN-11)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -92,6 +93,7 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PUT | `/api/partners/:id` | admin, central | Substitui os dados (o código não muda); `active` ausente mantém |
 | GET | `/api/payouts?kind=&status=&partner_id=` | admin, central | Comissões (`comissao`) e repasses (`repasse`); `status` pendente ou paga |
 | POST | `/api/payouts/:id/pay` | admin, central | Marca como pago (data e quem marcou). 409 se já pago ou sem percentual |
+| GET | `/api/dashboard?month=AAAA-MM` | admin, central | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
@@ -147,7 +149,8 @@ bookings
   deposit_cents, km_limit_per_day, extra_km_cents   -- cópia do veículo na criação (V7); limite nulo = km livre
   delivered_km, returned_km, excess_km, excess_km_cents   -- odômetro e km excedente (RN-02.18)
             extra_minutes, extra_cents            -- atraso por minuto, diária ÷ 1440 (RN-02.19, V10); total_cents não muda
-  referred_by_partner_id FK partners NULL   -- V9: quem indicou (RN-07.5)
+    referred_by_partner_id FK partners NULL   -- V9: quem indicou (RN-07.5)
+  paid_at TIMESTAMPTZ NULL              -- V12: marcar a conferência payment grava; desmarcar apaga (PEN-11)
 
   expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)
   created_by FK users, created_at, updated_at
