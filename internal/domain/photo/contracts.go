@@ -15,11 +15,16 @@ type Repository interface {
 	Delete(ctx context.Context, id string) (Photo, error)
 	// SetCover põe a foto do veículo em primeiro lugar.
 	SetCover(ctx context.Context, id string) (Photo, error)
+	// PublicFleet lista os carros fora de manutenção com a foto de capa, para o site.
+	PublicFleet(ctx context.Context) ([]Car, error)
+	// VehiclePhoto acha só foto de veículo: foto de reserva nunca é pública.
+	VehiclePhoto(ctx context.Context, id string) (Photo, error)
 }
 
 // Store é o bucket (internal/infra/storage).
 type Store interface {
 	Put(ctx context.Context, key string, body io.Reader, size int64, contentType string) error
+	Get(ctx context.Context, key string) ([]byte, error)
 	URL(ctx context.Context, key string, ttl time.Duration) (string, error)
 	Delete(ctx context.Context, key string) error
 }
@@ -29,6 +34,9 @@ type Service interface {
 	List(ctx context.Context, ownerType, ownerID, stage string) ([]Photo, error)
 	Delete(ctx context.Context, id string) error
 	SetCover(ctx context.Context, id string) (Photo, error)
+	PublicFleet(ctx context.Context) ([]Car, error)
+	// Variant devolve a versão redimensionada da foto do veículo, gerando e guardando na primeira vez.
+	Variant(ctx context.Context, id string, width int) ([]byte, error)
 }
 
 type Logger interface {

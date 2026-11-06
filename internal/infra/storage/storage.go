@@ -17,12 +17,18 @@ import (
 	"neonflow-api/internal/config"
 )
 
-// ErrNotConfigured: sem as variáveis STORAGE_*, não há onde guardar arquivos.
-var ErrNotConfigured = errors.New("armazenamento de arquivos não configurado")
+var (
+	// ErrNotConfigured: sem as variáveis STORAGE_*, não há onde guardar arquivos.
+	ErrNotConfigured = errors.New("armazenamento de arquivos não configurado")
+	// ErrNotFound: a chave não existe no bucket.
+	ErrNotFound = errors.New("arquivo não encontrado")
+)
 
 // Store é o que os domínios usam; os testes usam um falso.
 type Store interface {
 	Put(ctx context.Context, key string, body io.Reader, size int64, contentType string) error
+	// Get lê o arquivo inteiro (fotos de até 10 MB); ErrNotFound se a chave não existe.
+	Get(ctx context.Context, key string) ([]byte, error)
 	URL(ctx context.Context, key string, ttl time.Duration) (string, error)
 	Delete(ctx context.Context, key string) error
 }
@@ -62,6 +68,22 @@ func (b *Bucket) Put(ctx context.Context, key string, body io.Reader, size int64
 	return nil
 }
 
+func (b *Bucket) Get(ctx context.Context, key string) ([]byte, error) {
+	obj, err := b.client.GetObject(ctx, b.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("get object: %w", err)
+	}
+	defer obj.Close() //nolint:errcheck
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("read object: %w", err)
+	}
+	return data, nil
+}
+
 func (b *Bucket) URL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	u, err := b.client.PresignedGetObject(ctx, b.bucket, key, ttl, nil)
 	if err != nil {
@@ -81,6 +103,7 @@ func (b *Bucket) Delete(ctx context.Context, key string) error {
 type Disabled struct{}
 
 func (Disabled) Put(context.Context, string, io.Reader, int64, string) error { return ErrNotConfigured }
+func (Disabled) Get(context.Context, string) ([]byte, error)                 { return nil, ErrNotConfigured }
 func (Disabled) URL(context.Context, string, time.Duration) (string, error) {
 	return "", ErrNotConfigured
 }

@@ -31,6 +31,7 @@ O fundador decidiu que o cadastro do veículo aceita fotos e que o site usa imag
 - **Depois:** Cloudflare R2. A troca é só de variáveis, porque o código fala S3 (`STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`), mais copiar os objetos para o novo bucket.
 - **Dependência aprovada:** `github.com/minio/minio-go/v7` (Apache 2.0), só o cliente S3.
 - **Diferença da recomendação inicial:** o envio passa pela API (multipart), que confere tipo pelo conteúdo e tamanho (10 MB) antes de gravar; a leitura é por link assinado de 15 minutos. O bucket é privado, inclusive para as fotos da reserva, que mostram placas e o estado do carro de cada cliente.
+- **Site público (06/11/2026):** `GET /api/public/fleet` e `GET /api/public/photos/:id/w/:largura` (640, 1280, 1920). A API gera a versão em JPEG 85 com reamostragem CatmullRom na primeira vez, guarda no bucket ao lado da original e entrega com cache de um ano (endereço fixo por foto e largura, pronto para CDN). Só fotos de veículo são públicas. Dependência aprovada: `golang.org/x/image` v0.33.0 (lê WebP e redimensiona), compatível com Go 1.25.
 - **Sem variáveis:** a API sobe normalmente e o envio responde 503 "armazenamento de arquivos não configurado" (ambiente local).
 
 ## Consequências

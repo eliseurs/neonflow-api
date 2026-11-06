@@ -103,7 +103,9 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | POST | `/api/customers/:id/anonymize` | admin | Apaga nome e contatos, também nos pedidos (LGPD) |
 | GET, POST | `/api/vehicles/:id/photos` | admin, central | Fotos do veículo; envio em multipart (`file`, JPEG/PNG/WebP, até 10 MB). Cada foto traz `url` assinada por 15 min |
 | GET, POST | `/api/bookings/:id/photos?stage=entrega\|devolucao` | admin, central | Fotos da reserva por etapa; entrega em confirmada/em locação, devolução em locação/devolvida (409 fora disso) |
-| DELETE | `/api/photos/:id`; POST `/api/photos/:id/cover` | admin, central | Apaga do bucket e do banco; capa do veículo |
+| DELETE | `/api/photos/:id`; POST `/api/photos/:id/cover` | admin, central | Apaga do bucket e do banco (com as versões); capa do veículo |
+| GET | `/api/public/fleet` | sem login | Carros fora de manutenção (Economy primeiro) com `photo_id` da capa; cache 5 min |
+| GET | `/api/public/photos/:id/w/640\|1280\|1920` | sem login | Versão JPEG da foto de veículo (nunca de reserva), gerada na primeira vez e guardada; cache de um ano |
 | GET | `/api/terms`; POST `/api/terms` | admin, central; POST só admin | Versões dos termos; publicar cria a próxima versão |
 | POST | `/api/bookings/:id/terms-link` | admin, central | Link de aceite (7 dias; só o hash no banco). 409 sem termos ou depois da retirada |
 | GET | `/api/bookings/:id/terms` | admin, central | Último aceite (`null` se não houve) |
