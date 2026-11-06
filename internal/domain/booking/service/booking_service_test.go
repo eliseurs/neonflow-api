@@ -168,19 +168,19 @@ func TestBookingService_ActualTimes(t *testing.T) {
 	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "ontem"})
 	assert.ErrorIs(t, err, booking.ErrInvalidDate)
 
-	// Devolução às 15h, 5 horas depois do combinado: passou da tolerância, 1 diária extra (RN-02.19).
+	// Devolução às 15h, 5 horas depois do combinado: 300 minutos × diária ÷ 1440 (RN-02.19).
 	repo.current = booking.Booking{ID: "b1", Stage: booking.StageEmLocacao, Checks: map[string]bool{"return": true},
 		EndAt: end, DailyRateCents: 10000, DeliveredAt: &delivered}
 	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
 	require.NoError(t, err)
 	assert.True(t, now.Equal(*repo.record.ReturnedAt))
-	assert.Equal(t, 1, *repo.record.ExtraDays)
-	assert.Equal(t, int64(10000), *repo.record.ExtraCents)
+	assert.Equal(t, 300, *repo.record.ExtraMinutes)
+	assert.Equal(t, int64(2083), *repo.record.ExtraCents)
 
 	// Dentro da tolerância de 1 hora: sem cobrança.
 	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-12T11:00"})
 	require.NoError(t, err)
-	assert.Equal(t, 0, *repo.record.ExtraDays)
+	assert.Equal(t, 0, *repo.record.ExtraMinutes)
 	assert.Equal(t, int64(0), *repo.record.ExtraCents)
 
 	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{At: "2026-12-10T09:00"})
@@ -227,11 +227,26 @@ func TestBookingService_Km(t *testing.T) {
 	assert.Equal(t, 50, *repo.record.ExcessKm)
 	assert.Equal(t, int64(7500), *repo.record.ExcessKmCents)
 
+	// 30 horas de atraso não aumentam a franquia: continua 400 km (q90).
+	svc.now = func() time.Time { return end.Add(30 * time.Hour) }
+	_, err = svc.Advance(ctx, "b1", "u1", km(10450))
+	require.NoError(t, err)
+	assert.Equal(t, 1800, *repo.record.ExtraMinutes)
+	assert.Equal(t, 50, *repo.record.ExcessKm)
+	svc.now = func() time.Time { return now }
+
 	// Entregue antes do odômetro existir: guarda a devolução, sem excedente.
 	repo.current.DeliveredKm = nil
 	_, err = svc.Advance(ctx, "b1", "u1", km(10450))
 	require.NoError(t, err)
 	assert.Nil(t, repo.record.ExcessKm)
+
+	// Limite sem valor do km (RN-02.18): mede o excedente; o valor fica com a central (RN-02.29).
+	repo.current.DeliveredKm, repo.current.ExtraKmCents = &delivered, nil
+	_, err = svc.Advance(ctx, "b1", "u1", km(10450))
+	require.NoError(t, err)
+	assert.Equal(t, 50, *repo.record.ExcessKm)
+	assert.Nil(t, repo.record.ExcessKmCents)
 
 	// Km livre: odômetro opcional e sem excedente.
 	repo.current.KmLimitPerDay, repo.current.ExtraKmCents = nil, nil

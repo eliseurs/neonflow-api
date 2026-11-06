@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Atraso por minuto, km controlado e rodada 5 do questionário
+
+- `V10_atraso_e_km`: `bookings.extra_minutes` substitui `extra_days` (reservas antigas: 1 diária = 1440 minutos, valor igual). As checagens do plano de km passam a aceitar limite sem valor do excedente; valor sem limite continua recusado.
+- `LateMinutes` e `LateCents` substituem `LateDays`: passada 1 hora de tolerância, cada minuto completo desde o combinado custa a diária ÷ 1440, arredondada ao centavo (RN-02.19). A resposta da API traz `extra_minutes` no lugar de `extra_days`.
+- Km controlado (RN-02.18): franquia somada no período, só nas diárias contratadas (q90); com limite e sem valor do km, a devolução mede `excess_km` e deixa `excess_km_cents` em 0 para a central definir (RN-02.29). `ErrKmPlanIncomplete` agora é só "valor sem limite".
+- Respostas q87–q98 registradas: conflito da q71 resolvido pela q88 (pagamento na reserva), RN-02.28 a RN-02.31 (devolução antecipada, extras e transfer), q96 (caução e km dos carros), q97 e q98 (fórmulas da tela inicial) em PEN-01, 02, 05, 07 e 11.
+
+---
+
 ## [2026-11-06] — Cadastro de parceiros e indicação (fase 1)
 
 - `V9_partners`: tabela `partners` (papéis proprietário, motorista e indicador, ao menos um; dados básicos; `referral_code` único; percentuais por parceiro em pontos-base, nulos = a definir), `vehicles.owner_partner_id` e `bookings.referred_by_partner_id` (FKs opcionais).

@@ -21,7 +21,7 @@ const (
 	invalidTextRepresentation = "22P02"
 
 	bookingColumns = `id, vehicle_id, client_name, start_at, end_at, place, stage, days,
-				daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_days, extra_cents,
+				daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_minutes, extra_cents,
 				deposit_cents, km_limit_per_day, extra_km_cents, delivered_km, returned_km, excess_km, excess_km_cents,
 		referred_by_partner_id, expires_at, created_by, created_at, updated_at`
 
@@ -81,7 +81,7 @@ const (
 		SET stage = $3,
 		    delivered_at = coalesce($4, delivered_at),
 		    returned_at = coalesce($5, returned_at),
-		    extra_days = coalesce($6, extra_days),
+		    extra_minutes = coalesce($6, extra_minutes),
 		    		    extra_cents = coalesce($7, extra_cents),
 		    delivered_km = coalesce($8, delivered_km),
 		    returned_km = coalesce($9, returned_km),
@@ -278,7 +278,7 @@ func (r *BookingRepository) Transition(ctx context.Context, id, from, to, userID
 		}
 		var err error
 		updated, err = scanBooking(tx.QueryRowContext(ctx, queryTransition, id, from, to,
-			rec.DeliveredAt, rec.ReturnedAt, rec.ExtraDays, rec.ExtraCents,
+			rec.DeliveredAt, rec.ReturnedAt, rec.ExtraMinutes, rec.ExtraCents,
 			rec.DeliveredKm, rec.ReturnedKm, rec.ExcessKm, rec.ExcessKmCents))
 		if err != nil {
 			return mapError(err, booking.ErrStageChanged, "transition booking")
@@ -376,7 +376,7 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	var kmLimit, deliveredKm, returnedKm sql.NullInt32
 	var referredBy sql.NullString
 	err := s.Scan(&b.ID, &b.VehicleID, &b.ClientName, &start, &end, &b.Place, &b.Stage, &b.Days,
-		&b.DailyRateCents, &b.TotalCents, &checks, &delivered, &returned, &b.ExtraDays, &b.ExtraCents,
+		&b.DailyRateCents, &b.TotalCents, &checks, &delivered, &returned, &b.ExtraMinutes, &b.ExtraCents,
 		&deposit, &kmLimit, &extraKm, &deliveredKm, &returnedKm, &b.ExcessKm, &b.ExcessKmCents,
 		&referredBy, &b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {

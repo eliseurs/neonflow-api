@@ -117,7 +117,7 @@ vehicles
   id, plate (UNIQUE, sem hífen), name, owner TEXT
   category CHECK (economy|premium), gear CHECK (manual|automatico), seats INT
     daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
-    deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; limite e valor do km juntos
+      deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
 
 partners (V9)                           -- RN-07
@@ -137,7 +137,7 @@ bookings
     delivered_at, returned_at TIMESTAMPTZ  -- hora real da entrega e da devolução (V6)
   deposit_cents, km_limit_per_day, extra_km_cents   -- cópia do veículo na criação (V7); limite nulo = km livre
   delivered_km, returned_km, excess_km, excess_km_cents   -- odômetro e km excedente (RN-02.18)
-    extra_days, extra_cents               -- atraso na devolução (RN-02.19); total_cents não muda
+            extra_minutes, extra_cents            -- atraso por minuto, diária ÷ 1440 (RN-02.19, V10); total_cents não muda
   referred_by_partner_id FK partners NULL   -- V9: quem indicou (RN-07.5)
 
   expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)

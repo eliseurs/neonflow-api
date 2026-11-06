@@ -14,6 +14,6 @@ var (
 	ErrInvalidDailyRate     = errors.New("diária deve ser maior que zero, em centavos")
 	ErrInvalidDeposit       = errors.New("caução deve ser maior que zero, em centavos")
 	ErrInvalidKmPlan        = errors.New("limite de km e valor do km excedente devem ser maiores que zero")
-	ErrKmPlanIncomplete     = errors.New("informe o limite de km por dia e o valor do km excedente juntos")
+	ErrKmPlanIncomplete     = errors.New("o valor do km excedente exige o limite de km por dia")
 	ErrOwnerPartnerNotFound = errors.New("parceiro proprietário não encontrado")
 )

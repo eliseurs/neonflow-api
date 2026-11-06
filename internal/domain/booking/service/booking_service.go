@@ -109,14 +109,18 @@ func (s *BookingService) record(b booking.Booking, next string, req booking.Adva
 	if req.Km != nil && b.DeliveredKm != nil && *req.Km < *b.DeliveredKm {
 		return booking.Record{}, booking.ErrKmBeforeDelivery
 	}
-	days := booking.LateDays(b.EndAt, when)
-	cents := int64(days) * b.DailyRateCents
-	rec := booking.Record{ReturnedAt: &when, ExtraDays: &days, ExtraCents: &cents, ReturnedKm: req.Km}
+	minutes := booking.LateMinutes(b.EndAt, when)
+	cents := booking.LateCents(minutes, b.DailyRateCents)
+	rec := booking.Record{ReturnedAt: &when, ExtraMinutes: &minutes, ExtraCents: &cents, ReturnedKm: req.Km}
 	// Sem o odômetro da entrega (entregue antes desta versão), não há como medir o excedente.
 	if limited && b.DeliveredKm != nil {
-		excess := booking.ExcessKm(*b.KmLimitPerDay, b.Days+days, *req.Km-*b.DeliveredKm)
-		excessCents := int64(excess) * *b.ExtraKmCents
-		rec.ExcessKm, rec.ExcessKmCents = &excess, &excessCents
+		excess := booking.ExcessKm(*b.KmLimitPerDay, b.Days, *req.Km-*b.DeliveredKm)
+		rec.ExcessKm = &excess
+		// Sem valor do km cadastrado, o excedente é medido e o valor fica com a central (RN-02.29).
+		if b.ExtraKmCents != nil {
+			excessCents := int64(excess) * *b.ExtraKmCents
+			rec.ExcessKmCents = &excessCents
+		}
 	}
 	return rec, nil
 }

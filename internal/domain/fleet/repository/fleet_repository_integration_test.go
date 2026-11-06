@@ -63,6 +63,15 @@ func TestFleetRepository_Integration(t *testing.T) {
 	assert.ErrorIs(t, err, fleet.ErrOwnerPartnerNotFound)
 	req.OwnerPartnerID = nil
 
+	// Limite sem valor do km é aceito pelo banco (V10); valor sem limite, não.
+	req.ExtraKmCents = nil
+	onlyLimit, err := repo.Update(ctx, created.ID, req)
+	require.NoError(t, err)
+	assert.Equal(t, 200, *onlyLimit.KmLimitPerDay)
+	assert.Nil(t, onlyLimit.ExtraKmCents)
+	_, err = database.ExecContext(ctx, `UPDATE vehicles SET km_limit_per_day = NULL, extra_km_cents = 150 WHERE id = $1`, created.ID)
+	assert.Error(t, err)
+
 	req.DepositCents, req.KmLimitPerDay, req.ExtraKmCents = nil, nil, nil
 	req.InMaintenance = true
 	req.DailyRateCents = 12000

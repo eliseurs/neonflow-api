@@ -17,7 +17,7 @@
 ## Detalhes
 
 - Não há bloqueio de manutenção por período, só o estado global do veículo. O tratamento de clientes afetados por manutenção inesperada não está definido (Dossiê F).
-- Frota informada pelo fundador: **VW Jetta 2014 (Economy)** e **Mercedes-Benz C180 (Premium)** (03 e 04/11/2026), **os dois de parceiros** (05/11/2026), então o repasse ao dono (RN-03.6, RN-03.7) vale para toda a frota atual. Faltam documentos e situação (PEN-01). São dados de cadastro, não seed de código.
+- Frota informada pelo fundador: **VW Jetta 2014 (Economy)** e **Mercedes-Benz C180 (Premium)** (03 e 04/11/2026), **os dois de parceiros** (05/11/2026), então o repasse ao dono (RN-03.6, RN-03.7) vale para toda a frota atual. Faltam documentos e situação (PEN-01). São dados de cadastro, não seed de código. Em 06/11/2026 (q96) o fundador informou **caução de R$ 350 e limite de 200 km por dia nos dois carros**, configuráveis; o valor do km excedente não foi informado; desde a V10 o limite pode ser cadastrado sem ele (km controlado, valor a definir pela central, RN-02.18).
 - RN-01.6 cria um estado entre "devolvido" e "disponível": o veículo aguarda o checklist. O carro pode sair de novo **no mesmo dia**, desde que o checklist esteja aprovado (RN-02.25), sem intervalo fixo de limpeza.
 - RN-01.6: na q80 o fundador colou a vistoria da Localiza, que confere o carro **também na retirada** (lataria, pneus, interior, acessórios, avarias já existentes, assinatura do cliente). Um checklist de retirada não foi decidido explicitamente; a etapa "confirmada → em locação" hoje só tem a conferência `delivery` (PEN-18).
 - Estados de exibição (RN-01.1, RN-01.3, RN-01.6): manutenção prevalece; depois em locação; aguardando checklist; reservado (com a próxima reserva); livre.

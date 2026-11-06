@@ -110,7 +110,7 @@ func (r VehicleRequest) Validate() (VehicleRequest, error) {
 		return r, ErrInvalidDeposit
 	case r.KmLimitPerDay != nil && *r.KmLimitPerDay <= 0, r.ExtraKmCents != nil && *r.ExtraKmCents <= 0:
 		return r, ErrInvalidKmPlan
-	case (r.KmLimitPerDay == nil) != (r.ExtraKmCents == nil):
+	case r.ExtraKmCents != nil && r.KmLimitPerDay == nil:
 		return r, ErrKmPlanIncomplete
 	case r.DailyRateCents <= 0:
 		return r, ErrInvalidDailyRate

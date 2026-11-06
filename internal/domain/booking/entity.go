@@ -74,9 +74,9 @@ type Booking struct {
 	// Hora real da entrega e da devolução, informadas pela central (RN-02.19).
 	DeliveredAt *time.Time `json:"delivered_at"`
 	ReturnedAt  *time.Time `json:"returned_at"`
-	// Diárias extras do atraso na devolução e o valor delas, pela diária da reserva (RN-02.19).
-	ExtraDays  int   `json:"extra_days"`
-	ExtraCents int64 `json:"extra_cents"`
+	// Minutos de atraso na devolução e o valor deles: diária ÷ 1440 por minuto (RN-02.19).
+	ExtraMinutes int   `json:"extra_minutes"`
+	ExtraCents   int64 `json:"extra_cents"`
 	// Caução e plano de km copiados do veículo na criação (RN-06.4, RN-02.18). KmLimitPerDay nulo = km livre.
 	DepositCents  *int64 `json:"deposit_cents"`
 	KmLimitPerDay *int   `json:"km_limit_per_day"`
@@ -129,7 +129,7 @@ type AdvanceRequest struct {
 type Record struct {
 	DeliveredAt   *time.Time
 	ReturnedAt    *time.Time
-	ExtraDays     *int
+	ExtraMinutes  *int
 	ExtraCents    *int64
 	DeliveredKm   *int
 	ReturnedKm    *int
@@ -137,25 +137,29 @@ type Record struct {
 	ExcessKmCents *int64
 }
 
-// ExcessKm é o que passou da franquia: limite por dia × diárias cobradas (as da reserva mais as do
-// atraso, RN-02.19). Abaixo da franquia, zero (RN-02.18).
-func ExcessKm(limitPerDay, chargedDays, driven int) int {
-	return max(driven-limitPerDay*chargedDays, 0)
+// ExcessKm é o que passou da franquia: limite por dia × diárias contratadas. As horas de atraso não
+// trazem franquia, como na Localiza (RN-02.18, q90). Abaixo da franquia, zero.
+func ExcessKm(limitPerDay, contractedDays, driven int) int {
+	return max(driven-limitPerDay*contractedDays, 0)
 }
 
-// LateDays conta as diárias extras de uma devolução: nada até 1 hora depois do combinado;
-// passado isso, 1 diária por bloco de 24 horas iniciado depois da tolerância (RN-02.19, RN-02.24).
-// Devolver antes do combinado não gera desconto.
-func LateDays(plannedEnd, returned time.Time) int {
-	late := returned.Sub(plannedEnd) - LateTolerance
-	if late <= 0 {
+// minutesPerDay é a diária em minutos: o atraso é cobrado a diária ÷ 1440 por minuto.
+const minutesPerDay = 24 * 60
+
+// LateMinutes conta os minutos exatos de atraso de uma devolução: nada até 1 hora depois do combinado;
+// passado isso, todos os minutos completos desde o horário combinado (RN-02.19). Devolver antes segue RN-02.28.
+func LateMinutes(plannedEnd, returned time.Time) int {
+	late := returned.Sub(plannedEnd)
+	if late <= LateTolerance {
 		return 0
 	}
-	days := int(late / DayLength)
-	if late%DayLength > 0 {
-		days++
-	}
-	return days
+	return int(late / time.Minute)
+}
+
+// LateCents é o valor do atraso: diária ÷ 1440 por minuto, arredondado ao centavo. A cada 24 horas
+// completa-se uma diária, então o valor nunca passa de uma diária por dia de atraso (RN-02.19, q89).
+func LateCents(minutes int, dailyRateCents int64) int64 {
+	return (int64(minutes)*dailyRateCents + minutesPerDay/2) / minutesPerDay
 }
 
 // NewBooking é o que o repository grava. Diária e total vêm do veículo dentro da transação (RN-02.6).
