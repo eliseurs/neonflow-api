@@ -92,6 +92,7 @@ func TestMe(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"id":"u1"`)
 
 	assert.Equal(t, http.StatusUnauthorized, do(router(fakeService{}, ""), http.MethodGet, "/me", "").Code)
-	assert.Equal(t, http.StatusNotFound, do(router(fakeService{meErr: authentication.ErrUserNotFound}, "u1"), http.MethodGet, "/me", "").Code)
+	// Usuário desativado ou removido: 401, e o painel volta ao login.
+	assert.Equal(t, http.StatusUnauthorized, do(router(fakeService{meErr: authentication.ErrUserNotFound}, "u1"), http.MethodGet, "/me", "").Code)
 	assert.Equal(t, http.StatusInternalServerError, do(router(fakeService{meErr: errors.New("db")}, "u1"), http.MethodGet, "/me", "").Code)
 }

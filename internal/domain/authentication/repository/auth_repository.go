@@ -17,12 +17,12 @@ const (
 	queryFindByEmail = `
 		SELECT id, name, email, role, password_hash, created_at, updated_at
 		FROM users
-		WHERE lower(email) = $1
+		WHERE lower(email) = $1 AND active
 	`
 	queryFindByID = `
 		SELECT id, name, email, role, created_at, updated_at
 		FROM users
-		WHERE id = $1
+		WHERE id = $1 AND active
 	`
 	queryCreate = `
 		INSERT INTO users (name, email, password_hash, role)
