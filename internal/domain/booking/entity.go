@@ -74,6 +74,8 @@ type Booking struct {
 	// Hora real da entrega e da devolução, informadas pela central (RN-02.19).
 	DeliveredAt *time.Time `json:"delivered_at"`
 	ReturnedAt  *time.Time `json:"returned_at"`
+	// Quando a central marcou o pagamento (conferência "payment"); nulo = não pago (PEN-11).
+	PaidAt *time.Time `json:"paid_at"`
 	// Minutos de atraso na devolução e o valor deles: diária ÷ 1440 por minuto (RN-02.19).
 	ExtraMinutes int   `json:"extra_minutes"`
 	ExtraCents   int64 `json:"extra_cents"`

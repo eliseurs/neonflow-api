@@ -23,7 +23,7 @@ const (
 	bookingColumns = `id, vehicle_id, client_name, start_at, end_at, place, stage, days,
 				daily_rate_cents, total_cents, checks, delivered_at, returned_at, extra_minutes, extra_cents,
 				deposit_cents, km_limit_per_day, extra_km_cents, delivered_km, returned_km, excess_km, excess_km_cents,
-		referred_by_partner_id, expires_at, created_by, created_at, updated_at`
+				referred_by_partner_id, paid_at, expires_at, created_by, created_at, updated_at`
 
 	// queryExpire cancela pré-reservas não pagas no prazo e registra a transição (RN-02.11).
 	// Roda antes de toda operação, então a disponibilidade nunca considera uma pré-reserva vencida.
@@ -72,7 +72,12 @@ const (
 		RETURNING ` + bookingColumns
 	querySetChecks = `
 		UPDATE bookings
-		SET checks = checks || $3::jsonb, updated_at = now()
+				SET checks = checks || $3::jsonb,
+		    -- Data do pagamento (PEN-11): marcar grava a primeira vez; desmarcar apaga.
+		    paid_at = CASE WHEN NOT ($3::jsonb ? 'payment') THEN paid_at
+		                   WHEN ($3::jsonb->>'payment')::boolean THEN coalesce(paid_at, now())
+		                   ELSE NULL END,
+		    updated_at = now()
 		WHERE id = $1 AND stage = $2
 		RETURNING ` + bookingColumns
 	// Pagamentos a parceiros no encerramento (RN-03.12, RN-03.13), com o percentual do parceiro no momento:
@@ -393,14 +398,14 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	var start, end time.Time
 	var checks []byte
 	var createdBy sql.NullString
-	var delivered, returned sql.NullTime
+	var delivered, returned, paid sql.NullTime
 	var deposit, extraKm sql.NullInt64
 	var kmLimit, deliveredKm, returnedKm sql.NullInt32
 	var referredBy sql.NullString
 	err := s.Scan(&b.ID, &b.VehicleID, &b.ClientName, &start, &end, &b.Place, &b.Stage, &b.Days,
 		&b.DailyRateCents, &b.TotalCents, &checks, &delivered, &returned, &b.ExtraMinutes, &b.ExtraCents,
 		&deposit, &kmLimit, &extraKm, &deliveredKm, &returnedKm, &b.ExcessKm, &b.ExcessKmCents,
-		&referredBy, &b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
+		&referredBy, &paid, &b.ExpiresAt, &createdBy, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return b, err
 	}
@@ -412,6 +417,7 @@ func scanBooking(s scanner) (booking.Booking, error) {
 	b.ReferredByPartnerID = nullable(referredBy)
 	b.DeliveredAt = localTime(delivered)
 	b.ReturnedAt = localTime(returned)
+	b.PaidAt = localTime(paid)
 	b.DepositCents = nullInt64(deposit)
 	b.ExtraKmCents = nullInt64(extraKm)
 	b.KmLimitPerDay = nullInt(kmLimit)
