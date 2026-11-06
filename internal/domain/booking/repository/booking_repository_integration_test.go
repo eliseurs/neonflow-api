@@ -274,3 +274,43 @@ func TestBookingRepository_ReturnChecklist(t *testing.T) {
 	_, err = repo.ReturnChecklist(ctx)
 	assert.Error(t, err)
 }
+
+func TestBookingRepository_Hours(t *testing.T) {
+	database := testutil.MigratedDB(t, "../../../../sql/migrations")
+	repo := NewBookingRepository(database)
+	ctx := context.Background()
+	userID, vehicleID := seed(t, database)
+
+	// RN-02.24: 25 horas são 2 diárias.
+	first, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Primeiro",
+		Period: period(t, "2026-12-20T10:00", "2026-12-21T11:00"), CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Equal(t, 2, first.Days)
+	assert.Equal(t, int64(20000), first.TotalCents)
+	assert.Equal(t, 10, first.StartAt.Hour(), "devolvido no fuso de Gramado")
+	assert.Equal(t, "America/Sao_Paulo", first.StartAt.Location().String())
+	assert.Equal(t, "2026-12-20", first.StartDate)
+	assert.Equal(t, "2026-12-21", first.EndDate)
+
+	// RN-02.25: retirada na mesma hora da devolução anterior é permitida; uma hora antes, não.
+	_, err = repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Sobreposto",
+		Period: period(t, "2026-12-21T10:00", "2026-12-22T10:00"), CreatedBy: userID})
+	assert.ErrorIs(t, err, booking.ErrPeriodUnavailable)
+	same, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Mesmo dia",
+		Period: period(t, "2026-12-21T11:00", "2026-12-22T09:00"), CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, same.Days)
+
+	// Disponibilidade por hora: livre antes das 10h do dia 20, ocupado às 10h30.
+	avail, err := repo.Available(ctx, period(t, "2026-12-19T10:00", "2026-12-20T10:00"))
+	require.NoError(t, err)
+	assert.Len(t, avail, 1)
+	avail, err = repo.Available(ctx, period(t, "2026-12-20T10:30", "2026-12-20T12:00"))
+	require.NoError(t, err)
+	assert.Empty(t, avail)
+
+	list, err := repo.List(ctx, vehicleID)
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+	assert.Equal(t, first.ID, list[0].ID, "ordem pela retirada")
+}

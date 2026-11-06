@@ -5,21 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"neonflow-api/internal/domain/fleet"
+	"neonflow-api/internal/pkg/timezone"
 )
 
 const (
 	uniqueViolation           = "23505"
 	invalidTextRepresentation = "22P02"
 
-	dateLayout = "2006-01-02"
-
 	// queryVehicles traz o veículo com o estado exibido e a próxima reserva (RN-01.1, RN-01.3, RN-01.6).
-	// "Hoje" é o dia em Gramado (fuso America/Sao_Paulo, suposição técnica registrada em RN-02).
+	// Conta a reserva que ainda não terminou (devolução combinada depois de agora).
 	// A pré-reserva vencida e não paga não conta, mesmo antes de a rotina de expiração cancelá-la (RN-02.11).
 	queryVehicles = `
 		SELECT v.id, v.plate, v.name, v.category, v.owner, v.seats, v.gear, v.daily_rate_cents,
@@ -31,17 +29,17 @@ const (
 		           WHEN nb.id IS NOT NULL THEN 'reservado'
 		           ELSE 'livre'
 		       END,
-		       nb.id, nb.client_name, nb.start_date, nb.end_date, nb.stage
+		       nb.id, nb.client_name, nb.start_at, nb.end_at, nb.stage
 		FROM vehicles v
 		LEFT JOIN LATERAL (
-		    SELECT b.id, b.client_name, b.start_date, b.end_date, b.stage
+		    SELECT b.id, b.client_name, b.start_at, b.end_at, b.stage
 		    FROM bookings b
 		    WHERE b.vehicle_id = v.id
 		      AND (b.stage = 'confirmada'
 		           OR (b.stage = 'preparacao'
 		               AND (b.expires_at > now() OR coalesce((b.checks->>'payment')::boolean, false))))
-		      AND b.end_date > (now() AT TIME ZONE 'America/Sao_Paulo')::date
-		    ORDER BY b.start_date, b.created_at
+		      AND b.end_at > now()
+		    ORDER BY b.start_at, b.created_at
 		    LIMIT 1
 		) nb ON true
 	`
@@ -130,14 +128,11 @@ func scanVehicle(s scanner) (fleet.Vehicle, error) {
 	if nbID.Valid {
 		v.NextBooking = &fleet.NextBooking{
 			ID: nbID.String, ClientName: nbClient.String, Stage: nbStage.String,
-			StartDate: formatDate(nbStart.Time), EndDate: formatDate(nbEnd.Time),
+			StartAt: nbStart.Time.In(timezone.Location), EndAt: nbEnd.Time.In(timezone.Location),
+			StartDate: timezone.Date(nbStart.Time), EndDate: timezone.Date(nbEnd.Time),
 		}
 	}
 	return v, nil
-}
-
-func formatDate(t time.Time) string {
-	return t.Format(dateLayout)
 }
 
 // mapError traduz linha inexistente e id mal formatado em ErrVehicleNotFound e placa repetida em ErrPlateTaken.

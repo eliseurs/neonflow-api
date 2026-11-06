@@ -2,15 +2,20 @@ package booking
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"neonflow-api/internal/pkg/timezone"
 )
 
 func TestParsePeriod(t *testing.T) {
+	// Só a data continua aceita e vira 09:00 de Gramado: 3 diárias de 24 horas.
 	p, err := ParsePeriod(" 2026-12-10 ", "2026-12-13")
 	require.NoError(t, err)
 	assert.Equal(t, 3, p.Days())
+	assert.Equal(t, time.Date(2026, 12, 10, 9, 0, 0, 0, timezone.Location), p.Start)
 
 	cases := []struct {
 		name, start, end string
@@ -18,9 +23,10 @@ func TestParsePeriod(t *testing.T) {
 	}{
 		{"30/02 não existe (RN-02.7)", "2026-02-30", "2026-03-02", ErrInvalidDate},
 		{"formato brasileiro", "10/12/2026", "2026-12-13", ErrInvalidDate},
+		{"hora inválida", "2026-12-10T25:00", "2026-12-13T10:00", ErrInvalidDate},
 		{"fim inválido", "2026-12-10", "", ErrInvalidDate},
-		{"mesmo dia (RN-02.12)", "2026-12-10", "2026-12-10", ErrInvalidPeriod},
-		{"fim antes do início", "2026-12-10", "2026-12-09", ErrInvalidPeriod},
+		{"mesmo instante", "2026-12-10T10:00", "2026-12-10T10:00", ErrInvalidPeriod},
+		{"fim antes do início", "2026-12-10T10:00", "2026-12-10T09:59", ErrInvalidPeriod},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -30,7 +36,41 @@ func TestParsePeriod(t *testing.T) {
 	}
 }
 
+func TestParseInstant(t *testing.T) {
+	local := time.Date(2026, 12, 10, 14, 30, 0, 0, timezone.Location)
+	for _, v := range []string{"2026-12-10T14:30", "2026-12-10T14:30:00", "2026-12-10T14:30:00-03:00", "2026-12-10T17:30:00Z"} {
+		got, err := ParseInstant(v)
+		require.NoError(t, err, v)
+		assert.True(t, local.Equal(got), v)
+	}
+}
+
+func TestPeriodDays(t *testing.T) {
+	// RN-02.24: blocos de 24 horas a partir da retirada, arredondando para cima; mínimo 1 (RN-02.12).
+	cases := []struct {
+		start, end string
+		days       int
+	}{
+		{"2026-12-10T14:00", "2026-12-11T14:00", 1},
+		{"2026-12-10T14:00", "2026-12-11T15:00", 2},
+		{"2026-12-10T14:00", "2026-12-12T13:59", 2},
+		{"2026-12-10T10:00", "2026-12-10T13:00", 1},
+		{"2026-12-10T22:00", "2026-12-11T08:00", 1},
+	}
+	for _, tc := range cases {
+		p, err := ParsePeriod(tc.start, tc.end)
+		require.NoError(t, err)
+		assert.Equal(t, tc.days, p.Days(), tc.start+" → "+tc.end)
+	}
+}
+
 func TestCreateRequestValidate(t *testing.T) {
+	withTime, err := CreateRequest{VehicleID: "v1", ClientName: "C", StartAt: "2026-12-10T14:00", EndAt: "2026-12-12T15:00",
+		StartDate: "2026-01-01", EndDate: "2026-01-02"}.Validate("u1")
+	require.NoError(t, err)
+	assert.Equal(t, 3, withTime.Period.Days(), "start_at e end_at têm prioridade sobre as datas")
+	assert.Equal(t, 14, withTime.Period.Start.Hour())
+
 	req := CreateRequest{VehicleID: " v1 ", ClientName: " Cliente ", StartDate: "2026-12-10", EndDate: "2026-12-12", Place: " Gramado "}
 	n, err := req.Validate("u1")
 	require.NoError(t, err)

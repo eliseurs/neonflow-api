@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"neonflow-api/internal/pkg/timezone"
 )
 
 // Etapas da locação (RN-02.4). Ativas são as que bloqueiam o período: todas, menos encerrada e cancelada.
@@ -15,8 +17,14 @@ const (
 	StageEncerrada  = "encerrada"
 	StageCancelada  = "cancelada"
 
-	// DateLayout é o formato das datas de retirada e devolução (RN-02.7).
+	// DateLayout é o formato das datas (AAAA-MM-DD), aceito por compatibilidade: vira 09:00 de Gramado.
 	DateLayout = "2006-01-02"
+	// DateTimeLayout é a data e hora local de Gramado, sem fuso (como o campo datetime-local do navegador).
+	DateTimeLayout = "2006-01-02T15:04"
+	// LegacyHour é a hora dada a uma data sem horário: a do protótipo e a da migração V5.
+	LegacyHour = 9
+	// DayLength é a diária: blocos de 24 horas a partir da retirada (RN-02.24).
+	DayLength = 24 * time.Hour
 
 	// PaymentWindow é o prazo para pagar a pré-reserva; depois ela é cancelada (RN-02.8, RN-02.11, ADR-0012).
 	PaymentWindow = 24 * time.Hour
@@ -42,8 +50,10 @@ type Booking struct {
 	ID             string          `json:"id"`
 	VehicleID      string          `json:"vehicle_id"`
 	ClientName     string          `json:"client_name"`
-	StartDate      string          `json:"start_date"`
-	EndDate        string          `json:"end_date"`
+	StartAt        time.Time       `json:"start_at"`
+	EndAt          time.Time       `json:"end_at"`
+	StartDate      string          `json:"start_date"` // dia de StartAt em Gramado; mantido por compatibilidade
+	EndDate        string          `json:"end_date"`   // dia de EndAt em Gramado; mantido por compatibilidade
 	Place          string          `json:"place"`
 	Stage          string          `json:"stage"`
 	Days           int             `json:"days"`
@@ -64,9 +74,13 @@ type Event struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// CreateRequest aceita start_at e end_at (data e hora). start_date e end_date (só data) continuam
+// aceitos por compatibilidade e viram 09:00.
 type CreateRequest struct {
 	VehicleID  string `json:"vehicle_id"`
 	ClientName string `json:"client_name"`
+	StartAt    string `json:"start_at"`
+	EndAt      string `json:"end_at"`
 	StartDate  string `json:"start_date"`
 	EndDate    string `json:"end_date"`
 	Place      string `json:"place"`
@@ -81,30 +95,66 @@ type NewBooking struct {
 	CreatedBy  string
 }
 
-// Period é o intervalo [Start, End) em datas de calendário.
+// Period é o intervalo [Start, End) entre a retirada e a devolução combinadas.
 type Period struct {
 	Start time.Time
 	End   time.Time
 }
 
+// Days conta as diárias em blocos de 24 horas a partir da retirada, arredondando para cima:
+// 24h = 1 diária, 25h = 2 (RN-02.24). Qualquer período vale ao menos 1 diária (RN-02.12).
+// A tolerância de 1 hora (RN-02.19) vale para o atraso na devolução, não para o período combinado.
 func (p Period) Days() int {
-	return int(p.End.Sub(p.Start).Hours() / 24)
+	d := p.End.Sub(p.Start)
+	days := int(d / DayLength)
+	if d%DayLength > 0 {
+		days++
+	}
+	return max(days, 1)
 }
 
-// ParsePeriod valida as datas (RN-02.7) e exige ao menos 1 diária (RN-02.12).
-func ParsePeriod(start, end string) (Period, error) {
-	s, err := time.Parse(DateLayout, strings.TrimSpace(start))
-	if err != nil {
-		return Period{}, ErrInvalidDate
+// ParseInstant lê a retirada ou a devolução. Aceita, nesta ordem: RFC 3339 com fuso
+// (2026-12-10T14:00:00-03:00), data e hora de Gramado (2026-12-10T14:00, com ou sem segundos)
+// e só a data (2026-12-10), que vira 09:00 por compatibilidade.
+func ParseInstant(value string) (time.Time, error) {
+	v := strings.TrimSpace(value)
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, nil
 	}
-	e, err := time.Parse(DateLayout, strings.TrimSpace(end))
+	for _, layout := range []string{DateTimeLayout, DateTimeLayout + ":05"} {
+		if t, err := time.ParseInLocation(layout, v, timezone.Location); err == nil {
+			return t, nil
+		}
+	}
+	if d, err := time.ParseInLocation(DateLayout, v, timezone.Location); err == nil {
+		return d.Add(LegacyHour * time.Hour), nil
+	}
+	return time.Time{}, ErrInvalidDate
+}
+
+// ParsePeriod valida a retirada e a devolução (RN-02.7, RN-02.23): a devolução vem depois da retirada.
+func ParsePeriod(start, end string) (Period, error) {
+	s, err := ParseInstant(start)
 	if err != nil {
-		return Period{}, ErrInvalidDate
+		return Period{}, err
+	}
+	e, err := ParseInstant(end)
+	if err != nil {
+		return Period{}, err
 	}
 	if !e.After(s) {
 		return Period{}, ErrInvalidPeriod
 	}
 	return Period{Start: s, End: e}, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (r CreateRequest) Validate(userID string) (NewBooking, error) {
@@ -120,7 +170,7 @@ func (r CreateRequest) Validate(userID string) (NewBooking, error) {
 	case n.ClientName == "":
 		return n, ErrClientNameRequired
 	}
-	period, err := ParsePeriod(r.StartDate, r.EndDate)
+	period, err := ParsePeriod(firstNonEmpty(r.StartAt, r.StartDate), firstNonEmpty(r.EndAt, r.EndDate))
 	if err != nil {
 		return n, err
 	}
