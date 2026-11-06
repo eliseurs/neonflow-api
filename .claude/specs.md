@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-06] — Caução, plano de km e odômetro
+
+- `V7_caucao_e_km`: no veículo, `deposit_cents`, `km_limit_per_day` e `extra_km_cents` (opcionais; limite e valor juntos). Na reserva, cópia dos três na criação e `delivered_km`, `returned_km`, `excess_km`, `excess_km_cents`.
+- Frota: `VehicleRequest` aceita os três campos; validação (`ErrInvalidDeposit`, `ErrInvalidKmPlan`, `ErrKmPlanIncomplete`). A disponibilidade devolve caução e plano de km do veículo.
+- Reserva: `km_plan` (livre/limitado; padrão: limitado se o veículo tiver limite; `ErrKmPlanUnavailable` se pedir limitado sem limite). No avanço, `km` (odômetro) é obrigatório no plano limitado; na devolução, `ExcessKm` = rodados − limite × (diárias + atraso), cobrado pelo valor copiado (RN-02.18). Recusa km negativo e km da devolução menor que o da entrega.
+- ADR-0014 (proposta): fotos dos veículos no Cloudflare R2 com URL assinada. Precisa de aprovação (conta, segredos e dependência nova).
+- Testes: validação, `ExcessKm`, serviço (odômetro obrigatório, excedente, entregue sem odômetro), handler e integração (plano padrão, recusa, cópia, odômetro). Cobertura em 95,5%.
+
+---
+
 ## [2026-11-06] — Hora real da entrega e da devolução e atraso
 
 - `V6_bookings_hora_real`: `delivered_at`, `returned_at`, `extra_days`, `extra_cents` e CHECK de devolução depois da entrega.

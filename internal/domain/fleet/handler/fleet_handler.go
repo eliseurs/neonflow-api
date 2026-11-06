@@ -87,6 +87,7 @@ func isValidation(err error) bool {
 	for _, target := range []error{
 		fleet.ErrInvalidPlate, fleet.ErrNameRequired, fleet.ErrInvalidCategory, fleet.ErrOwnerRequired,
 		fleet.ErrInvalidSeats, fleet.ErrInvalidGear, fleet.ErrInvalidDailyRate,
+		fleet.ErrInvalidDeposit, fleet.ErrInvalidKmPlan, fleet.ErrKmPlanIncomplete,
 	} {
 		if errors.Is(err, target) {
 			return true

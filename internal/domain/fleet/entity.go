@@ -28,17 +28,21 @@ const (
 var platePattern = regexp.MustCompile(`^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$`)
 
 type Vehicle struct {
-	ID             string    `json:"id"`
-	Plate          string    `json:"plate"`
-	Name           string    `json:"name"`
-	Category       string    `json:"category"`
-	Owner          string    `json:"owner"`
-	Seats          int       `json:"seats"`
-	Gear           string    `json:"gear"`
-	DailyRateCents int64     `json:"daily_rate_cents"`
-	InMaintenance  bool      `json:"in_maintenance"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             string `json:"id"`
+	Plate          string `json:"plate"`
+	Name           string `json:"name"`
+	Category       string `json:"category"`
+	Owner          string `json:"owner"`
+	Seats          int    `json:"seats"`
+	Gear           string `json:"gear"`
+	DailyRateCents int64  `json:"daily_rate_cents"`
+	InMaintenance  bool   `json:"in_maintenance"`
+	// Caução (RN-06.4) e quilometragem (RN-02.18), configuráveis; nulo = não informado.
+	DepositCents  *int64    `json:"deposit_cents"`
+	KmLimitPerDay *int      `json:"km_limit_per_day"`
+	ExtraKmCents  *int64    `json:"extra_km_cents"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 	// Status e NextBooking vêm calculados nas leituras da frota; outras listas (disponibilidade) não os trazem.
 	Status      string       `json:"status,omitempty"`
 	NextBooking *NextBooking `json:"next_booking,omitempty"`
@@ -65,6 +69,9 @@ type VehicleRequest struct {
 	Gear           string `json:"gear"`
 	DailyRateCents int64  `json:"daily_rate_cents"`
 	InMaintenance  bool   `json:"in_maintenance"`
+	DepositCents   *int64 `json:"deposit_cents"`
+	KmLimitPerDay  *int   `json:"km_limit_per_day"`
+	ExtraKmCents   *int64 `json:"extra_km_cents"`
 }
 
 func NormalizePlate(plate string) string {
@@ -92,6 +99,12 @@ func (r VehicleRequest) Validate() (VehicleRequest, error) {
 		return r, ErrInvalidSeats
 	case r.Gear != GearManual && r.Gear != GearAutomatico:
 		return r, ErrInvalidGear
+	case r.DepositCents != nil && *r.DepositCents <= 0:
+		return r, ErrInvalidDeposit
+	case r.KmLimitPerDay != nil && *r.KmLimitPerDay <= 0, r.ExtraKmCents != nil && *r.ExtraKmCents <= 0:
+		return r, ErrInvalidKmPlan
+	case (r.KmLimitPerDay == nil) != (r.ExtraKmCents == nil):
+		return r, ErrKmPlanIncomplete
 	case r.DailyRateCents <= 0:
 		return r, ErrInvalidDailyRate
 	}

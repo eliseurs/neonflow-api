@@ -194,6 +194,53 @@ func TestBookingService_ActualTimes(t *testing.T) {
 	assert.Equal(t, booking.Record{}, repo.record)
 }
 
+func TestBookingService_Km(t *testing.T) {
+	ctx := context.Background()
+	gramado := timezone.Location
+	now := time.Date(2026, 12, 12, 10, 30, 0, 0, gramado)
+	end := time.Date(2026, 12, 12, 10, 0, 0, 0, gramado)
+	limit, extraKm := 200, int64(150)
+	repo := &fakeRepo{current: booking.Booking{ID: "b1", Stage: booking.StageConfirmada, Checks: map[string]bool{"delivery": true},
+		EndAt: end, Days: 2, DailyRateCents: 10000, KmLimitPerDay: &limit, ExtraKmCents: &extraKm}}
+	svc := NewBookingService(repo)
+	svc.now = func() time.Time { return now }
+	km := func(v int) booking.AdvanceRequest { return booking.AdvanceRequest{Km: &v} }
+
+	// Plano limitado exige o odômetro (RN-02.18).
+	_, err := svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
+	assert.ErrorIs(t, err, booking.ErrKmRequired)
+	_, err = svc.Advance(ctx, "b1", "u1", km(-1))
+	assert.ErrorIs(t, err, booking.ErrInvalidKm)
+	_, err = svc.Advance(ctx, "b1", "u1", km(10000))
+	require.NoError(t, err)
+	assert.Equal(t, 10000, *repo.record.DeliveredKm)
+
+	delivered := 10000
+	repo.current.Stage, repo.current.Checks, repo.current.DeliveredKm = booking.StageEmLocacao, map[string]bool{"return": true}, &delivered
+	_, err = svc.Advance(ctx, "b1", "u1", km(9999))
+	assert.ErrorIs(t, err, booking.ErrKmBeforeDelivery)
+
+	// 2 diárias × 200 km = 400 km de franquia; rodou 450 → 50 km × R$ 1,50.
+	_, err = svc.Advance(ctx, "b1", "u1", km(10450))
+	require.NoError(t, err)
+	assert.Equal(t, 10450, *repo.record.ReturnedKm)
+	assert.Equal(t, 50, *repo.record.ExcessKm)
+	assert.Equal(t, int64(7500), *repo.record.ExcessKmCents)
+
+	// Entregue antes do odômetro existir: guarda a devolução, sem excedente.
+	repo.current.DeliveredKm = nil
+	_, err = svc.Advance(ctx, "b1", "u1", km(10450))
+	require.NoError(t, err)
+	assert.Nil(t, repo.record.ExcessKm)
+
+	// Km livre: odômetro opcional e sem excedente.
+	repo.current.KmLimitPerDay, repo.current.ExtraKmCents = nil, nil
+	_, err = svc.Advance(ctx, "b1", "u1", booking.AdvanceRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, repo.record.ReturnedKm)
+	assert.Nil(t, repo.record.ExcessKm)
+}
+
 func TestBookingService_ReturnChecklist(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{

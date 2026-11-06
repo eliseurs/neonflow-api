@@ -64,15 +64,15 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/auth/me` | JWT | Usuário do token |
 | GET | `/api/vehicles` | admin, central | Lista a frota, com `status` (`manutencao`, `em_locacao`, `aguardando_checklist`, `reservado`, `livre`) e `next_booking` (RN-01.3) |
 | GET | `/api/vehicles/:id` | admin, central | Um veículo, com `status` e `next_booking` |
-| POST | `/api/vehicles` | admin, central | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance`) |
+| POST | `/api/vehicles` | admin, central | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance` e, opcionais, `deposit_cents`, `km_limit_per_day` com `extra_km_cents`) |
 | PUT | `/api/vehicles/:id` | admin, central | Substitui todos os campos (inclusive manutenção) |
 | GET | `/api/availability?start_at=&end_at=` | admin, central | Veículos fora de manutenção e sem reserva ativa no intervalo (`start_date`/`end_date` só com a data ainda são aceitos e viram 09:00) |
 | GET | `/api/bookings?vehicle_id=` | admin, central | Lista reservas |
 | GET | `/api/bookings/:id` | admin, central | Uma reserva |
 | GET | `/api/bookings/:id/events` | admin, central | Histórico de etapas |
-| POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_at`, `end_at`, `place`): bloqueia o intervalo. Data e hora `AAAA-MM-DDTHH:MM` no horário de Gramado ou RFC 3339 |
+| POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_at`, `end_at`, `place`, `km_plan` livre|limitado): bloqueia o intervalo. Data e hora `AAAA-MM-DDTHH:MM` no horário de Gramado ou RFC 3339 |
 | PATCH | `/api/bookings/:id/checks` | admin, central | Marca conferências da etapa atual (`{"cnh": true}`) |
-| POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas. Corpo opcional `{"at": "AAAA-MM-DDTHH:MM"}`: hora real da entrega ou da devolução (padrão: agora). Na devolução, calcula o atraso (RN-02.19) |
+| POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas. Corpo opcional `{"at": "AAAA-MM-DDTHH:MM", "km": 12345}`: hora real e odômetro da entrega ou da devolução (hora padrão: agora; km obrigatório no plano limitado). Na devolução, calcula o atraso (RN-02.19) |
 | POST | `/api/bookings/:id/cancel` | admin, central | Cancela (preparação ou confirmada) e libera o período |
 | GET | `/api/checklist-items` | admin, central | Itens do checklist de devolução, em ordem (ativos e inativos) |
 | POST | `/api/checklist-items` | admin, central | Novo item (`label`, `position`, `active`); a chave sai do nome e não muda |
@@ -103,7 +103,8 @@ Frota e reservas (V2, V3) — regras em `.claude/business-rules/01-frota.md` e `
 vehicles
   id, plate (UNIQUE, sem hífen), name, owner TEXT
   category CHECK (economy|premium), gear CHECK (manual|automatico), seats INT
-  daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
+    daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
+  deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; limite e valor do km juntos
 
 bookings
   id, vehicle_id FK, client_name, start_at TIMESTAMPTZ, end_at TIMESTAMPTZ, place   -- V5 (RN-02.23)
@@ -111,7 +112,9 @@ bookings
   days = blocos de 24h, para cima       -- RN-02.24
   daily_rate_cents, total_cents         -- cópia da diária na criação (RN-02.6)
   checks JSONB                          -- conferências: cnh, terms, deposit, payment, delivery, return, issues
-  delivered_at, returned_at TIMESTAMPTZ  -- hora real da entrega e da devolução (V6)
+    delivered_at, returned_at TIMESTAMPTZ  -- hora real da entrega e da devolução (V6)
+  deposit_cents, km_limit_per_day, extra_km_cents   -- cópia do veículo na criação (V7); limite nulo = km livre
+  delivered_km, returned_km, excess_km, excess_km_cents   -- odômetro e km excedente (RN-02.18)
   extra_days, extra_cents               -- atraso na devolução (RN-02.19); total_cents não muda
   expires_at = criação + 24h            -- pré-reserva não paga é cancelada (RN-02.11)
   created_by FK users, created_at, updated_at

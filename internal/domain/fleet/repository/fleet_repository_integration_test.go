@@ -38,11 +38,24 @@ func TestFleetRepository_Integration(t *testing.T) {
 	assert.Error(t, err, "CHECK de categoria no banco")
 	assert.NotErrorIs(t, err, fleet.ErrPlateTaken)
 
+	assert.Nil(t, created.DepositCents, "caução não informada")
+	assert.Nil(t, created.KmLimitPerDay)
+
+	deposit, limit, extraKm := int64(150000), 200, int64(150)
+	req.DepositCents, req.KmLimitPerDay, req.ExtraKmCents = &deposit, &limit, &extraKm
+	withKm, err := repo.Update(ctx, created.ID, req)
+	require.NoError(t, err)
+	assert.Equal(t, int64(150000), *withKm.DepositCents)
+	assert.Equal(t, 200, *withKm.KmLimitPerDay)
+	assert.Equal(t, int64(150), *withKm.ExtraKmCents)
+
+	req.DepositCents, req.KmLimitPerDay, req.ExtraKmCents = nil, nil, nil
 	req.InMaintenance = true
 	req.DailyRateCents = 12000
 	updated, err := repo.Update(ctx, created.ID, req)
 	require.NoError(t, err)
 	assert.True(t, updated.InMaintenance)
+	assert.Nil(t, updated.KmLimitPerDay, "PUT substitui: sem km, volta a nulo")
 	assert.Equal(t, int64(12000), updated.DailyRateCents)
 	assert.True(t, updated.UpdatedAt.After(created.UpdatedAt) || updated.UpdatedAt.Equal(created.UpdatedAt))
 

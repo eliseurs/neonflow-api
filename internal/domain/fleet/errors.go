@@ -12,4 +12,7 @@ var (
 	ErrInvalidSeats     = errors.New("número de lugares deve ser maior que zero")
 	ErrInvalidGear      = errors.New("câmbio inválido: use manual ou automatico")
 	ErrInvalidDailyRate = errors.New("diária deve ser maior que zero, em centavos")
+	ErrInvalidDeposit   = errors.New("caução deve ser maior que zero, em centavos")
+	ErrInvalidKmPlan    = errors.New("limite de km e valor do km excedente devem ser maiores que zero")
+	ErrKmPlanIncomplete = errors.New("informe o limite de km por dia e o valor do km excedente juntos")
 )

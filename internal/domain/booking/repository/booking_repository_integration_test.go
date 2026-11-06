@@ -361,3 +361,64 @@ func TestBookingRepository_ActualTimes(t *testing.T) {
 	_, err = database.ExecContext(ctx, `UPDATE bookings SET returned_at = delivered_at - interval '1 hour' WHERE id = $1`, b.ID)
 	assert.Error(t, err)
 }
+
+func TestBookingRepository_DepositAndKm(t *testing.T) {
+	database := testutil.MigratedDB(t, "../../../../sql/migrations")
+	repo := NewBookingRepository(database)
+	ctx := context.Background()
+	userID, vehicleID := seed(t, database)
+
+	// Sem limite cadastrado: km livre por padrão, e "limitado" é recusado.
+	free, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Livre",
+		Period: period(t, "2026-12-01T10:00", "2026-12-02T10:00"), CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Nil(t, free.KmLimitPerDay)
+	assert.Nil(t, free.DepositCents)
+	_, err = repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Limitado",
+		Period: period(t, "2026-12-03T10:00", "2026-12-04T10:00"), CreatedBy: userID, KmPlan: booking.KmPlanLimitado})
+	assert.ErrorIs(t, err, booking.ErrKmPlanUnavailable)
+
+	_, err = database.ExecContext(ctx, `UPDATE vehicles SET deposit_cents = 150000, km_limit_per_day = 200, extra_km_cents = 150 WHERE id = $1`, vehicleID)
+	require.NoError(t, err)
+
+	// Com limite: limitado por padrão, com caução e valores copiados do veículo (RN-06.4, RN-02.18).
+	limited, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Padrão",
+		Period: period(t, "2026-12-05T10:00", "2026-12-07T10:00"), CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Equal(t, int64(150000), *limited.DepositCents)
+	assert.Equal(t, 200, *limited.KmLimitPerDay)
+	assert.Equal(t, int64(150), *limited.ExtraKmCents)
+
+	chosenFree, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Escolheu livre",
+		Period: period(t, "2026-12-08T10:00", "2026-12-09T10:00"), CreatedBy: userID, KmPlan: booking.KmPlanLivre})
+	require.NoError(t, err)
+	assert.Nil(t, chosenFree.KmLimitPerDay)
+	assert.Equal(t, int64(150000), *chosenFree.DepositCents, "a caução vale para qualquer plano")
+
+	// Mudar o veículo depois não muda a reserva (como a diária, RN-02.6).
+	_, err = database.ExecContext(ctx, `UPDATE vehicles SET km_limit_per_day = 300 WHERE id = $1`, vehicleID)
+	require.NoError(t, err)
+	got, err := repo.FindByID(ctx, limited.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 200, *got.KmLimitPerDay)
+
+	// Odômetro e excedente gravados nas transições.
+	_, err = repo.Transition(ctx, limited.ID, booking.StagePreparacao, booking.StageConfirmada, userID, booking.Record{})
+	require.NoError(t, err)
+	start, end, excess, cents := 10000, 10450, 50, int64(7500)
+	_, err = repo.Transition(ctx, limited.ID, booking.StageConfirmada, booking.StageEmLocacao, userID, booking.Record{DeliveredKm: &start})
+	require.NoError(t, err)
+	back, err := repo.Transition(ctx, limited.ID, booking.StageEmLocacao, booking.StageDevolvida, userID,
+		booking.Record{ReturnedKm: &end, ExcessKm: &excess, ExcessKmCents: &cents})
+	require.NoError(t, err)
+	assert.Equal(t, 10000, *back.DeliveredKm)
+	assert.Equal(t, 10450, *back.ReturnedKm)
+	assert.Equal(t, 50, back.ExcessKm)
+	assert.Equal(t, int64(7500), back.ExcessKmCents)
+
+	avail, err := repo.Available(ctx, period(t, "2026-12-20T10:00", "2026-12-21T10:00"))
+	require.NoError(t, err)
+	require.Len(t, avail, 1)
+	assert.Equal(t, 300, *avail[0].KmLimitPerDay, "a disponibilidade traz o plano atual do veículo")
+	assert.Equal(t, int64(150000), *avail[0].DepositCents)
+}

@@ -72,6 +72,7 @@ func TestFleetHandler(t *testing.T) {
 		{"não encontrado", fleet.ErrVehicleNotFound, http.MethodGet, "/vehicles/x", "", http.StatusNotFound, "veículo não encontrado"},
 		{"placa repetida", fleet.ErrPlateTaken, http.MethodPost, "/vehicles", body, http.StatusConflict, "placa já cadastrada"},
 		{"validação", fleet.ErrInvalidDailyRate, http.MethodPut, "/vehicles/v1", body, http.StatusBadRequest, "diária deve ser maior"},
+		{"plano de km", fleet.ErrKmPlanIncomplete, http.MethodPost, "/vehicles", body, http.StatusBadRequest, "juntos"},
 		{"erro interno", errors.New("db"), http.MethodGet, "/vehicles", "", http.StatusInternalServerError, "erro interno"},
 	}
 	for _, tc := range cases {
