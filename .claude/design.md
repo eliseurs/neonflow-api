@@ -41,7 +41,8 @@ internal/
         dashboard/              # indicadores da tela inicial: faturamento do mês e ocupação (PEN-11)
         transfer/               # transfer operado pela central: oferta, aceite, desistência, conclusão (RN-02.9 a 02.31)
     customer/               # clientes: contato, idioma, histórico e anonimização (RN-04.7, RN-04.8)
-    photo/                  # fotos do veículo e da reserva no bucket privado (RN-01.6, RN-01.7, ADR-0014)
+    photo/                  # fotos do veículo e da reserva no bucket privado; frota e página pública do carro (RN-01.6 a 01.8, ADR-0014)
+    maintenance/            # histórico de manutenção do veículo (RN-01.10)
     terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
@@ -104,6 +105,10 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET, POST | `/api/vehicles/:id/photos` | admin, central | Fotos do veículo; envio em multipart (`file`, JPEG/PNG/WebP, até 10 MB). Cada foto traz `url` assinada por 15 min |
 | GET, POST | `/api/bookings/:id/photos?stage=entrega\|devolucao` | admin, central | Fotos da reserva por etapa; entrega em confirmada/em locação, devolução em locação/devolvida (409 fora disso) |
 | DELETE | `/api/photos/:id`; POST `/api/photos/:id/cover` | admin, central | Apaga do bucket e do banco (com as versões); capa do veículo |
+| GET | `/api/vehicles/stats`, `/api/vehicles/:id/stats` | admin, central | Desempenho dos últimos 12 meses: reservas, dias, ocupação, receita, km, manutenção e resultado (RN-01.10) |
+| GET, POST | `/api/vehicles/:id/maintenance` | admin, central | Histórico de manutenção (`date` AAAA-MM-DD não futura, `kind` preventiva\|corretiva\|revisao\|pneus\|outros, `description`, `cost_cents`, `odometer_km`, `workshop`) |
+| PUT, DELETE | `/api/maintenance/:id` | admin, central | Corrige ou apaga um registro |
+| GET | `/api/public/fleet/:id` | sem login | Página do carro: ficha e todas as fotos (`photo_ids`, capa primeiro); sem placa, diária nem proprietário |
 | GET | `/api/public/fleet` | sem login | Carros fora de manutenção (Economy primeiro) com `photo_id` da capa; cache 5 min |
 | GET | `/api/public/photos/:id/w/640\|1280\|1920` | sem login | Versão JPEG da foto de veículo (nunca de reserva), gerada na primeira vez e guardada; cache de um ano |
 | GET | `/api/terms`; POST `/api/terms` | admin, central; POST só admin | Versões dos termos; publicar cria a próxima versão |
@@ -152,6 +157,11 @@ vehicles
     daily_rate_cents BIGINT > 0, in_maintenance BOOL, created_at, updated_at
       deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
+  year, color, fuel, doors, features TEXT[], description   -- V18: ficha (RN-01.8), todos opcionais
+
+vehicle_maintenance (V18)               -- RN-01.10
+  id, vehicle_id FK, date, kind CHECK (preventiva|corretiva|revisao|pneus|outros), description
+  cost_cents NULL, odometer_km NULL, workshop, created_by, created_at
 
 photos (V16)                            -- RN-01.6, RN-01.7; arquivo no bucket privado (ADR-0014)
   id, owner_type CHECK (veiculo|reserva), owner_id, stage ('' no veículo; entrega|devolucao na reserva)

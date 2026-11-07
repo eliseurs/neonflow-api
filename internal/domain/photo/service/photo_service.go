@@ -122,6 +122,11 @@ func (s *PhotoService) PublicFleet(ctx context.Context) ([]photo.Car, error) {
 	return s.repo.PublicFleet(ctx)
 }
 
+// PublicCar: a página do carro no site.
+func (s *PhotoService) PublicCar(ctx context.Context, id string) (photo.Car, error) {
+	return s.repo.PublicCar(ctx, id)
+}
+
 // Variant entrega a versão da foto do veículo na largura pedida. Na primeira vez gera a partir da
 // original e guarda no bucket; depois só lê.
 func (s *PhotoService) Variant(ctx context.Context, id string, width int) ([]byte, error) {

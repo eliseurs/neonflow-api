@@ -40,6 +40,9 @@ func (f *fakeService) Delete(context.Context, string) error { return f.err }
 func (f *fakeService) PublicFleet(context.Context) ([]photo.Car, error) {
 	return []photo.Car{{ID: "v1", Name: "Jetta"}}, f.err
 }
+func (f *fakeService) PublicCar(_ context.Context, id string) (photo.Car, error) {
+	return photo.Car{ID: id, Name: "Jetta", PhotoIDs: []string{"p1"}}, f.err
+}
 func (f *fakeService) Variant(_ context.Context, _ string, width int) ([]byte, error) {
 	return []byte("jpeg-" + strconv.Itoa(width)), f.err
 }
@@ -63,6 +66,7 @@ func router(svc photo.Service) *gin.Engine {
 	r.DELETE("/photos/:id", h.Delete)
 	r.POST("/photos/:id/cover", h.Cover)
 	r.GET("/public/fleet", h.PublicFleet)
+	r.GET("/public/fleet/:id", h.PublicCar)
 	r.GET("/public/photos/:id/w/:width", h.Variant)
 	return r
 }
@@ -119,6 +123,10 @@ func TestPhotoHandler(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "public, max-age=300", w.Header().Get("Cache-Control"))
 	assert.Contains(t, w.Body.String(), `"name":"Jetta"`)
+	w = do(r, http.MethodGet, "/public/fleet/v1", nil, "")
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"photo_ids":["p1"]`)
+	assert.Equal(t, "public, max-age=300", w.Header().Get("Cache-Control"))
 	w = do(r, http.MethodGet, "/public/photos/p1/w/640", nil, "")
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "image/jpeg", w.Header().Get("Content-Type"))
@@ -138,6 +146,7 @@ func TestPhotoHandler_Errors(t *testing.T) {
 		{photo.ErrEmpty, http.StatusBadRequest},
 		{photo.ErrInvalidStage, http.StatusBadRequest},
 		{photo.ErrInvalidWidth, http.StatusBadRequest},
+		{photo.ErrCarNotFound, http.StatusNotFound},
 		{photo.ErrTooLarge, http.StatusRequestEntityTooLarge},
 		{photo.ErrWrongStage, http.StatusConflict},
 		{storage.ErrNotConfigured, http.StatusServiceUnavailable},

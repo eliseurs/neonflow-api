@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS vehicle_maintenance;
+ALTER TABLE vehicles
+    DROP COLUMN IF EXISTS description,
+    DROP COLUMN IF EXISTS features,
+    DROP COLUMN IF EXISTS doors,
+    DROP COLUMN IF EXISTS fuel,
+    DROP COLUMN IF EXISTS color,
+    DROP COLUMN IF EXISTS year;

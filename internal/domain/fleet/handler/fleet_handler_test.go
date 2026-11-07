@@ -32,6 +32,14 @@ func (f fakeService) Update(_ context.Context, id string, r fleet.VehicleRequest
 	return fleet.Vehicle{ID: id, Plate: r.Plate}, f.err
 }
 
+func (f fakeService) Comparison(context.Context) ([]fleet.Stats, error) {
+	return []fleet.Stats{{VehicleID: "v1", Bookings: 3}}, f.err
+}
+
+func (f fakeService) VehicleStats(_ context.Context, id string) (fleet.Stats, error) {
+	return fleet.Stats{VehicleID: id}, f.err
+}
+
 type nopLog struct{}
 
 func (nopLog) Error(string, ...any) {}
@@ -41,6 +49,8 @@ func do(svc fleet.Service, method, path, body string) *httptest.ResponseRecorder
 	h := NewFleetHandler(svc, nopLog{})
 	r := gin.New()
 	r.GET("/vehicles", h.List)
+	r.GET("/vehicles/stats", h.Comparison)
+	r.GET("/vehicles/:id/stats", h.Stats)
 	r.GET("/vehicles/:id", h.Get)
 	r.POST("/vehicles", h.Create)
 	r.PUT("/vehicles/:id", h.Update)
@@ -64,6 +74,11 @@ func TestFleetHandler(t *testing.T) {
 		want   string
 	}{
 		{"list", nil, http.MethodGet, "/vehicles", "", http.StatusOK, `"id":"v1"`},
+		{"comparativo", nil, http.MethodGet, "/vehicles/stats", "", http.StatusOK, `"bookings":3`},
+		{"desempenho", nil, http.MethodGet, "/vehicles/v7/stats", "", http.StatusOK, `"vehicle_id":"v7"`},
+		{"desempenho sem carro", fleet.ErrVehicleNotFound, http.MethodGet, "/vehicles/x/stats", "", http.StatusNotFound, "veículo não encontrado"},
+		{"comparativo com erro", errors.New("db"), http.MethodGet, "/vehicles/stats", "", http.StatusInternalServerError, "erro interno"},
+		{"ficha inválida", fleet.ErrInvalidFuel, http.MethodPost, "/vehicles", body, http.StatusBadRequest, "combustível inválido"},
 		{"get", nil, http.MethodGet, "/vehicles/v9", "", http.StatusOK, `"id":"v9"`},
 		{"create", nil, http.MethodPost, "/vehicles", body, http.StatusCreated, `"plate":"TST1A23"`},
 		{"update", nil, http.MethodPut, "/vehicles/v1", body, http.StatusOK, `"id":"v1"`},

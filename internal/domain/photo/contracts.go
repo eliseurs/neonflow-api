@@ -17,6 +17,8 @@ type Repository interface {
 	SetCover(ctx context.Context, id string) (Photo, error)
 	// PublicFleet lista os carros fora de manutenção com a foto de capa, para o site.
 	PublicFleet(ctx context.Context) ([]Car, error)
+	// PublicCar é a página do carro: ficha e todas as fotos; carro em manutenção não aparece.
+	PublicCar(ctx context.Context, id string) (Car, error)
 	// VehiclePhoto acha só foto de veículo: foto de reserva nunca é pública.
 	VehiclePhoto(ctx context.Context, id string) (Photo, error)
 }
@@ -35,6 +37,7 @@ type Service interface {
 	Delete(ctx context.Context, id string) error
 	SetCover(ctx context.Context, id string) (Photo, error)
 	PublicFleet(ctx context.Context) ([]Car, error)
+	PublicCar(ctx context.Context, id string) (Car, error)
 	// Variant devolve a versão redimensionada da foto do veículo, gerando e guardando na primeira vez.
 	Variant(ctx context.Context, id string, width int) ([]byte, error)
 }

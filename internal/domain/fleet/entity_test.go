@@ -1,6 +1,7 @@
 package fleet
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +26,21 @@ func TestVehicleRequestValidate(t *testing.T) {
 	onlyLimit.KmLimitPerDay = ptr(200)
 	_, err = onlyLimit.Validate()
 	require.NoError(t, err)
+
+	// Ficha: normaliza combustível e itens (sem repetir, na ordem da lista oficial).
+	ficha := validRequest()
+	ficha.Year, ficha.Doors, ficha.Color, ficha.Fuel = ptr(2014), ptr(4), " Preto ", " Flex "
+	ficha.Features = []string{"multimidia", "ar_condicionado", "multimidia"}
+	ficha.Description = "  Sedã confortável.  "
+	f, err := ficha.Validate()
+	require.NoError(t, err)
+	assert.Equal(t, "flex", f.Fuel)
+	assert.Equal(t, "Preto", f.Color)
+	assert.Equal(t, []string{"ar_condicionado", "multimidia"}, f.Features)
+	assert.Equal(t, "Sedã confortável.", f.Description)
+	empty, err := validRequest().Validate()
+	require.NoError(t, err)
+	assert.Equal(t, []string{}, empty.Features, "sem itens: lista vazia")
 
 	got, err := validRequest().Validate()
 	require.NoError(t, err)
@@ -57,6 +73,11 @@ func TestVehicleRequestValidate(t *testing.T) {
 
 		{"valor sem km", func(r *VehicleRequest) { r.ExtraKmCents = ptr(int64(150)) }, ErrKmPlanIncomplete},
 		{"proprietário", func(r *VehicleRequest) { r.OwnerPartnerID = ptr("nao-e-uuid") }, ErrOwnerPartnerNotFound},
+		{"ano", func(r *VehicleRequest) { r.Year = ptr(1970) }, ErrInvalidYear},
+		{"combustível", func(r *VehicleRequest) { r.Fuel = "carvão" }, ErrInvalidFuel},
+		{"portas", func(r *VehicleRequest) { r.Doors = ptr(7) }, ErrInvalidDoors},
+		{"item", func(r *VehicleRequest) { r.Features = []string{"jacuzzi"} }, ErrInvalidFeature},
+		{"descrição", func(r *VehicleRequest) { r.Description = strings.Repeat("a", 2001) }, ErrDescriptionTooLong},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

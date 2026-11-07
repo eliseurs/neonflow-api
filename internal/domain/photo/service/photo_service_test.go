@@ -52,6 +52,9 @@ func (f *fakeRepo) Delete(context.Context, string) (photo.Photo, error) {
 	return f.deleted, f.deleteErr
 }
 func (f *fakeRepo) PublicFleet(context.Context) ([]photo.Car, error) { return f.fleet, nil }
+func (f *fakeRepo) PublicCar(_ context.Context, id string) (photo.Car, error) {
+	return photo.Car{ID: id, PhotoIDs: []string{"p1", "p2"}}, nil
+}
 func (f *fakeRepo) VehiclePhoto(context.Context, string) (photo.Photo, error) {
 	return f.vphoto, f.vphotoErr
 }
@@ -209,6 +212,9 @@ func TestVariant(t *testing.T) {
 	cars, err := svc.PublicFleet(ctx)
 	require.NoError(t, err)
 	assert.Len(t, cars, 1)
+	car, err := svc.PublicCar(ctx, "v1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"p1", "p2"}, car.PhotoIDs)
 
 	// Primeira vez: gera da original e guarda.
 	out, err := svc.Variant(ctx, "p1", 640)

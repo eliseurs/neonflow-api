@@ -64,6 +64,15 @@ func (h *PhotoHandler) PublicFleet(c *gin.Context) {
 	h.respond(c, http.StatusOK, cars, err, "public fleet failed")
 }
 
+// PublicCar godoc: GET /api/public/fleet/:id (sem login)
+func (h *PhotoHandler) PublicCar(c *gin.Context) {
+	car, err := h.svc.PublicCar(c.Request.Context(), c.Param("id"))
+	if err == nil {
+		c.Header("Cache-Control", "public, max-age=300")
+	}
+	h.respond(c, http.StatusOK, car, err, "public car failed")
+}
+
 // Variant godoc: GET /api/public/photos/:id/w/:width (sem login; só foto de veículo)
 func (h *PhotoHandler) Variant(c *gin.Context) {
 	width, err := strconv.Atoi(c.Param("width"))
@@ -108,7 +117,7 @@ func (h *PhotoHandler) respond(c *gin.Context, status int, data any, err error, 
 	switch {
 	case err == nil:
 		api.Respond(c, status, data)
-	case errors.Is(err, photo.ErrNotFound), errors.Is(err, photo.ErrOwnerNotFound):
+	case errors.Is(err, photo.ErrNotFound), errors.Is(err, photo.ErrOwnerNotFound), errors.Is(err, photo.ErrCarNotFound):
 		api.RespondError(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, photo.ErrInvalidType), errors.Is(err, photo.ErrEmpty), errors.Is(err, photo.ErrInvalidStage),
 		errors.Is(err, photo.ErrInvalidWidth):

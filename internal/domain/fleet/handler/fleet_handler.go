@@ -39,6 +39,26 @@ func (h *FleetHandler) Get(c *gin.Context) {
 	api.Respond(c, http.StatusOK, v)
 }
 
+// Comparison godoc: GET /api/vehicles/stats (últimos 12 meses, toda a frota)
+func (h *FleetHandler) Comparison(c *gin.Context) {
+	list, err := h.svc.Comparison(c.Request.Context())
+	if err != nil {
+		h.fail(c, "fleet comparison failed", err)
+		return
+	}
+	api.Respond(c, http.StatusOK, list)
+}
+
+// Stats godoc: GET /api/vehicles/:id/stats
+func (h *FleetHandler) Stats(c *gin.Context) {
+	s, err := h.svc.VehicleStats(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		h.fail(c, "vehicle stats failed", err)
+		return
+	}
+	api.Respond(c, http.StatusOK, s)
+}
+
 // Create godoc: POST /api/vehicles
 func (h *FleetHandler) Create(c *gin.Context) {
 	var req fleet.VehicleRequest
@@ -88,6 +108,7 @@ func isValidation(err error) bool {
 		fleet.ErrInvalidPlate, fleet.ErrNameRequired, fleet.ErrInvalidCategory, fleet.ErrOwnerRequired,
 		fleet.ErrInvalidSeats, fleet.ErrInvalidGear, fleet.ErrInvalidDailyRate,
 		fleet.ErrInvalidDeposit, fleet.ErrInvalidKmPlan, fleet.ErrKmPlanIncomplete, fleet.ErrOwnerPartnerNotFound,
+		fleet.ErrInvalidYear, fleet.ErrInvalidFuel, fleet.ErrInvalidDoors, fleet.ErrInvalidFeature, fleet.ErrDescriptionTooLong,
 	} {
 		if errors.Is(err, target) {
 			return true

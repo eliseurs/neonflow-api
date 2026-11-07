@@ -26,14 +26,23 @@ var VariantWidths = []int{640, 1280, 1920}
 // cardBackground é o fundo do cartão da landing, usado onde a foto (PNG/WebP) é transparente.
 var cardBackground = color.RGBA{R: 0x0b, G: 0x0b, B: 0x0b, A: 0xff}
 
-// Car é um carro da frota para o site público, com a foto de capa.
+// Car é um carro da frota para o site público, com a foto de capa e a ficha. Sem placa, diária,
+// caução nem proprietário: só o que o cliente vê.
 type Car struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Category string  `json:"category"`
-	Seats    int     `json:"seats"`
-	Gear     string  `json:"gear"`
-	PhotoID  *string `json:"photo_id"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Category    string   `json:"category"`
+	Seats       int      `json:"seats"`
+	Gear        string   `json:"gear"`
+	Year        *int     `json:"year"`
+	Color       string   `json:"color"`
+	Fuel        string   `json:"fuel"`
+	Doors       *int     `json:"doors"`
+	Features    []string `json:"features"`
+	Description string   `json:"description"`
+	PhotoID     *string  `json:"photo_id"`
+	// PhotoIDs, na página do carro: todas as fotos, a capa primeiro.
+	PhotoIDs []string `json:"photo_ids,omitempty"`
 }
 
 func VariantAllowed(width int) bool {

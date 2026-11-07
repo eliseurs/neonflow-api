@@ -103,6 +103,18 @@ func TestPhotoRepository_Integration(t *testing.T) {
 	assert.Equal(t, bb.ID, *fleet[0].PhotoID, "capa")
 	assert.Equal(t, premiumID, fleet[1].ID)
 	assert.Nil(t, fleet[1].PhotoID)
+	assert.Nil(t, fleet[0].PhotoIDs, "a lista de fotos só vai na página do carro")
+	assert.Equal(t, []string{}, fleet[1].Features)
+
+	// Página do carro: todas as fotos, a capa primeiro; em manutenção não aparece.
+	car, err := repo.PublicCar(ctx, vehicleID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{bb.ID, a.ID}, car.PhotoIDs)
+	assert.Equal(t, bb.ID, *car.PhotoID)
+	for _, id := range []string{maintID, "00000000-0000-0000-0000-000000000000", "nao-e-uuid"} {
+		_, err = repo.PublicCar(ctx, id)
+		assert.ErrorIs(t, err, photo.ErrCarNotFound, id)
+	}
 	vp, err := repo.VehiclePhoto(ctx, bb.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "veiculos/v/b.jpg", vp.Key)
