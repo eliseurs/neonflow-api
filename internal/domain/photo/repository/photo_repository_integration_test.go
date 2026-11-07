@@ -105,6 +105,7 @@ func TestPhotoRepository_Integration(t *testing.T) {
 	assert.Nil(t, fleet[1].PhotoID)
 	assert.Nil(t, fleet[0].PhotoIDs, "a lista de fotos só vai na página do carro")
 	assert.Equal(t, []string{}, fleet[1].Features)
+	assert.Equal(t, 1, fleet[0].MinDays, "sem mínimo configurado vale 1")
 
 	// Página do carro: todas as fotos, a capa primeiro; em manutenção não aparece.
 	car, err := repo.PublicCar(ctx, vehicleID)

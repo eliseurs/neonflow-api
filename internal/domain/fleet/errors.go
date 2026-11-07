@@ -21,4 +21,5 @@ var (
 	ErrInvalidDoors         = errors.New("portas: de 2 a 5")
 	ErrInvalidFeature       = errors.New("item desconhecido na lista do carro")
 	ErrDescriptionTooLong   = errors.New("descrição longa demais (até 2000 caracteres)")
+	ErrInvalidMinDays       = errors.New("mínimo de diárias: de 1 a 365")
 )

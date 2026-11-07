@@ -40,7 +40,9 @@ type Car struct {
 	Doors       *int     `json:"doors"`
 	Features    []string `json:"features"`
 	Description string   `json:"description"`
-	PhotoID     *string  `json:"photo_id"`
+	// MinDays: mínimo de diárias do carro (1 quando não configurado).
+	MinDays int     `json:"min_days"`
+	PhotoID *string `json:"photo_id"`
 	// PhotoIDs, na página do carro: todas as fotos, a capa primeiro.
 	PhotoIDs []string `json:"photo_ids,omitempty"`
 }

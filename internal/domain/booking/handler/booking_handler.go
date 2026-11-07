@@ -139,7 +139,8 @@ func statusFor(err error) int {
 		errors.Is(err, booking.ErrReturnBeforeDelivery), errors.Is(err, booking.ErrInvalidKmPlan),
 		errors.Is(err, booking.ErrKmRequired), errors.Is(err, booking.ErrInvalidKm),
 		errors.Is(err, booking.ErrKmBeforeDelivery), errors.Is(err, booking.ErrReferrerNotFound),
-		errors.Is(err, booking.ErrCustomerNotFound), errors.Is(err, booking.ErrPhotosRequired):
+		errors.Is(err, booking.ErrCustomerNotFound), errors.Is(err, booking.ErrPhotosRequired),
+		errors.Is(err, booking.ErrBelowMinDays):
 		return http.StatusBadRequest
 	case errors.Is(err, booking.ErrVehicleInMaintenance), errors.Is(err, booking.ErrPeriodUnavailable),
 		errors.Is(err, booking.ErrChecksPending), errors.Is(err, booking.ErrStageFinal),

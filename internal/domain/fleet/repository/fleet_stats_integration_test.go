@@ -34,6 +34,12 @@ func TestFleetRepository_DetailsAndStats(t *testing.T) {
 		Seats: 5, Gear: "manual", DailyRateCents: 10000})
 	require.NoError(t, err)
 	assert.Nil(t, mobi.Year)
+	assert.Nil(t, mobi.MinDays, "sem mínimo configurado")
+	three := 3
+	upd, err := repo.Update(ctx, mobi.ID, fleet.VehicleRequest{Plate: "TST2B34", Name: "Mobi Teste", Category: "economy", Owner: "Dono",
+		Seats: 5, Gear: "manual", DailyRateCents: 10000, MinDays: &three})
+	require.NoError(t, err)
+	assert.Equal(t, 3, *upd.MinDays)
 	assert.Equal(t, []string{}, mobi.Features)
 
 	// Duas locações do Jetta nos últimos dias (uma devolvida com km), uma cancelada e uma futura que não contam.

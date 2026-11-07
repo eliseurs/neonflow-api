@@ -35,7 +35,7 @@ const (
 	// Site público: carros fora de manutenção, Economy antes de Premium, com a primeira foto (capa).
 	publicCar = `
 		SELECT v.id, v.name, v.category, v.seats, v.gear, v.year, v.color, v.fuel, v.doors,
-		       array_to_json(v.features), v.description,
+		       		       array_to_json(v.features), v.description, coalesce(v.min_days, 1),
 		       coalesce((SELECT json_agg(p.id ORDER BY p.position, p.created_at) FROM photos p
 		                 WHERE p.owner_type = 'veiculo' AND p.owner_id = v.id), '[]')
 		FROM vehicles v
@@ -159,7 +159,7 @@ func scanCar(s scanner) (photo.Car, error) {
 	var year, doors sql.NullInt32
 	var features, photos []byte
 	err := s.Scan(&c.ID, &c.Name, &c.Category, &c.Seats, &c.Gear, &year, &c.Color, &c.Fuel, &doors,
-		&features, &c.Description, &photos)
+		&features, &c.Description, &c.MinDays, &photos)
 	if err != nil {
 		return c, err
 	}

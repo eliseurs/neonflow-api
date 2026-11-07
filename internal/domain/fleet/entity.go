@@ -57,14 +57,16 @@ type Vehicle struct {
 	KmLimitPerDay  *int    `json:"km_limit_per_day"`
 	ExtraKmCents   *int64  `json:"extra_km_cents"`
 	// Ficha para o site e o painel; todos opcionais.
-	Year        *int      `json:"year"`
-	Color       string    `json:"color"`
-	Fuel        string    `json:"fuel"`
-	Doors       *int      `json:"doors"`
-	Features    []string  `json:"features"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Year        *int     `json:"year"`
+	Color       string   `json:"color"`
+	Fuel        string   `json:"fuel"`
+	Doors       *int     `json:"doors"`
+	Features    []string `json:"features"`
+	Description string   `json:"description"`
+	// MinDays é o mínimo de diárias deste carro; nulo = o mínimo geral de 1 (RN-02.12, RN-02.32).
+	MinDays   *int      `json:"min_days"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	// Status e NextBooking vêm calculados nas leituras da frota; outras listas (disponibilidade) não os trazem.
 	Status      string       `json:"status,omitempty"`
 	NextBooking *NextBooking `json:"next_booking,omitempty"`
@@ -123,6 +125,7 @@ type VehicleRequest struct {
 	Doors          *int     `json:"doors"`
 	Features       []string `json:"features"`
 	Description    string   `json:"description"`
+	MinDays        *int     `json:"min_days"`
 }
 
 func NormalizePlate(plate string) string {
@@ -176,6 +179,8 @@ func (r VehicleRequest) Validate() (VehicleRequest, error) {
 		return r, ErrInvalidDoors
 	case len([]rune(r.Description)) > maxDescription:
 		return r, ErrDescriptionTooLong
+	case r.MinDays != nil && (*r.MinDays < 1 || *r.MinDays > 365):
+		return r, ErrInvalidMinDays
 	}
 	return r, nil
 }

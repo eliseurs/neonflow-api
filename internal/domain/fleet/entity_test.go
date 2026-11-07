@@ -74,6 +74,8 @@ func TestVehicleRequestValidate(t *testing.T) {
 		{"valor sem km", func(r *VehicleRequest) { r.ExtraKmCents = ptr(int64(150)) }, ErrKmPlanIncomplete},
 		{"proprietário", func(r *VehicleRequest) { r.OwnerPartnerID = ptr("nao-e-uuid") }, ErrOwnerPartnerNotFound},
 		{"ano", func(r *VehicleRequest) { r.Year = ptr(1970) }, ErrInvalidYear},
+		{"mínimo zero", func(r *VehicleRequest) { r.MinDays = ptr(0) }, ErrInvalidMinDays},
+		{"mínimo alto", func(r *VehicleRequest) { r.MinDays = ptr(366) }, ErrInvalidMinDays},
 		{"combustível", func(r *VehicleRequest) { r.Fuel = "carvão" }, ErrInvalidFuel},
 		{"portas", func(r *VehicleRequest) { r.Doors = ptr(7) }, ErrInvalidDoors},
 		{"item", func(r *VehicleRequest) { r.Features = []string{"jacuzzi"} }, ErrInvalidFeature},

@@ -57,7 +57,7 @@ const (
 		ORDER BY created_at, id
 	`
 	queryLockVehicle = `
-				SELECT daily_rate_cents, in_maintenance, deposit_cents, km_limit_per_day, extra_km_cents
+				SELECT daily_rate_cents, in_maintenance, deposit_cents, km_limit_per_day, extra_km_cents, coalesce(min_days, 1)
 		FROM vehicles
 		WHERE id = $1
 		FOR SHARE
@@ -135,7 +135,8 @@ const (
 		       v.daily_rate_cents, v.in_maintenance, v.deposit_cents, v.km_limit_per_day, v.extra_km_cents,
 		       v.created_at, v.updated_at
 		FROM vehicles v
-		WHERE NOT v.in_maintenance
+				WHERE NOT v.in_maintenance
+		  AND coalesce(v.min_days, 1) <= $3 -- o período cobre o mínimo de diárias do carro (RN-02.32)
 		  AND NOT EXISTS (
 			SELECT 1 FROM bookings b
 			WHERE b.vehicle_id = v.id
@@ -233,12 +234,16 @@ func (r *BookingRepository) Create(ctx context.Context, n booking.NewBooking) (b
 		var inMaintenance bool
 		var deposit, extraKm sql.NullInt64
 		var kmLimit sql.NullInt32
-		err := tx.QueryRowContext(ctx, queryLockVehicle, n.VehicleID).Scan(&rate, &inMaintenance, &deposit, &kmLimit, &extraKm)
+		var minDays int
+		err := tx.QueryRowContext(ctx, queryLockVehicle, n.VehicleID).Scan(&rate, &inMaintenance, &deposit, &kmLimit, &extraKm, &minDays)
 		if err := mapError(err, booking.ErrVehicleNotFound, "lock vehicle"); err != nil {
 			return err
 		}
 		if inMaintenance {
 			return booking.ErrVehicleInMaintenance // RN-01.1
+		}
+		if n.Period.Days() < minDays {
+			return booking.MinDaysError{Min: minDays} // RN-02.32
 		}
 		// RN-02.18: o plano vem da escolha da central; sem escolha, limitado se o veículo tiver limite.
 		if n.KmPlan == booking.KmPlanLimitado && !kmLimit.Valid {
@@ -323,7 +328,7 @@ func (r *BookingRepository) Available(ctx context.Context, p booking.Period) ([]
 	if err := expire(ctx, r.db); err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, queryAvailable, p.Start, p.End)
+	rows, err := r.db.QueryContext(ctx, queryAvailable, p.Start, p.End, p.Days())
 	if err != nil {
 		return nil, fmt.Errorf("available vehicles: %w", err)
 	}

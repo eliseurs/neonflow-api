@@ -158,6 +158,7 @@ vehicles
       deposit_cents, km_limit_per_day, extra_km_cents   -- V7, opcionais; V10: limite pode vir sem valor (excedente a definir), valor exige limite
   owner_partner_id FK partners NULL     -- V9: parceiro proprietário (RN-07.4)
   year, color, fuel, doors, features TEXT[], description   -- V18: ficha (RN-01.8), todos opcionais
+  min_days INT NULL 1..365              -- V19: mínimo de diárias do carro; nulo = 1 (RN-02.32)
 
 vehicle_maintenance (V18)               -- RN-01.10
   id, vehicle_id FK, date, kind CHECK (preventiva|corretiva|revisao|pneus|outros), description
