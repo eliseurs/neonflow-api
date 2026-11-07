@@ -41,6 +41,18 @@ const (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
+// MinDaysError diz quantas diárias o carro exige (RN-02.32).
+type MinDaysError struct{ Min int }
+
+func (e MinDaysError) Error() string {
+	if e.Min == 1 {
+		return "este carro exige no mínimo 1 diária"
+	}
+	return fmt.Sprintf("este carro exige no mínimo %d diárias", e.Min)
+}
+
+func (e MinDaysError) Is(target error) bool { return target == ErrBelowMinDays }
+
 // PhotosCheck é a chave do item "Fotos" do checklist de devolução (V4): só marca com foto enviada.
 const PhotosCheck = "fotos"
 

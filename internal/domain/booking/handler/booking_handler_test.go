@@ -146,6 +146,7 @@ func TestBookingHandler_Errors(t *testing.T) {
 		{booking.ErrReferrerNotFound, http.StatusBadRequest},
 		{booking.ErrCustomerNotFound, http.StatusBadRequest},
 		{booking.ErrPhotosRequired, http.StatusBadRequest},
+		{booking.MinDaysError{Min: 3}, http.StatusBadRequest},
 		{booking.ErrFutureTime, http.StatusBadRequest},
 		{booking.ErrReturnBeforeDelivery, http.StatusBadRequest},
 		{errors.New("db"), http.StatusInternalServerError},

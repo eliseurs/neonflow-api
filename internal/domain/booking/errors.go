@@ -28,4 +28,7 @@ var (
 	ErrReferrerNotFound     = errors.New("parceiro indicador não encontrado")
 	ErrCustomerNotFound     = errors.New("cliente não encontrado")
 	ErrPhotosRequired       = errors.New("envie ao menos uma foto da devolução antes de marcar o item Fotos")
+	// ErrBelowMinDays: o período tem menos diárias que o mínimo do carro (RN-02.32); a mensagem
+	// mostrada vem de MinDaysError, com o número.
+	ErrBelowMinDays = errors.New("período menor que o mínimo de diárias do carro")
 )

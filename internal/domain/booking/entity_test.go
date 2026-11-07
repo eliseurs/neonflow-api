@@ -191,3 +191,10 @@ func TestCancelable(t *testing.T) {
 		assert.False(t, Cancelable(s), s)
 	}
 }
+
+func TestMinDaysError(t *testing.T) {
+	assert.Equal(t, "este carro exige no mínimo 3 diárias", MinDaysError{Min: 3}.Error())
+	assert.Equal(t, "este carro exige no mínimo 1 diária", MinDaysError{Min: 1}.Error())
+	assert.ErrorIs(t, MinDaysError{Min: 3}, ErrBelowMinDays)
+	assert.NotErrorIs(t, MinDaysError{Min: 3}, ErrVehicleNotFound)
+}

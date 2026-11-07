@@ -109,6 +109,7 @@ func isValidation(err error) bool {
 		fleet.ErrInvalidSeats, fleet.ErrInvalidGear, fleet.ErrInvalidDailyRate,
 		fleet.ErrInvalidDeposit, fleet.ErrInvalidKmPlan, fleet.ErrKmPlanIncomplete, fleet.ErrOwnerPartnerNotFound,
 		fleet.ErrInvalidYear, fleet.ErrInvalidFuel, fleet.ErrInvalidDoors, fleet.ErrInvalidFeature, fleet.ErrDescriptionTooLong,
+		fleet.ErrInvalidMinDays,
 	} {
 		if errors.Is(err, target) {
 			return true

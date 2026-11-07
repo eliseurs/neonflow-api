@@ -449,3 +449,30 @@ func TestBookingRepository_Referrer(t *testing.T) {
 		ReferredBy: "00000000-0000-0000-0000-000000000000"})
 	assert.ErrorIs(t, err, booking.ErrReferrerNotFound)
 }
+
+func TestBookingRepository_MinDays(t *testing.T) {
+	database := testutil.MigratedDB(t, "../../../../sql/migrations")
+	repo := NewBookingRepository(database)
+	ctx := context.Background()
+	userID, vehicleID := seed(t, database)
+	_, err := database.ExecContext(ctx, `UPDATE vehicles SET min_days = 3 WHERE id = $1`, vehicleID)
+	require.NoError(t, err)
+
+	// RN-02.32: 2 diárias num carro que exige 3 são recusadas, com o número na mensagem.
+	short := period(t, "2026-12-10T10:00", "2026-12-12T10:00")
+	_, err = repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Curta", Period: short, CreatedBy: userID})
+	assert.ErrorIs(t, err, booking.ErrBelowMinDays)
+	assert.EqualError(t, err, "este carro exige no mínimo 3 diárias")
+	avail, err := repo.Available(ctx, short)
+	require.NoError(t, err)
+	assert.Empty(t, avail, "fora da disponibilidade para período curto")
+
+	// 2 dias e 1 hora = 3 diárias: aceita e aparece na disponibilidade.
+	enough := period(t, "2026-12-20T10:00", "2026-12-22T11:00")
+	avail, err = repo.Available(ctx, enough)
+	require.NoError(t, err)
+	require.Len(t, avail, 1)
+	b, err := repo.Create(ctx, booking.NewBooking{VehicleID: vehicleID, ClientName: "Longa", Period: enough, CreatedBy: userID})
+	require.NoError(t, err)
+	assert.Equal(t, 3, b.Days)
+}

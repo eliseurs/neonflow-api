@@ -26,7 +26,7 @@ const (
 	queryVehicles = `
 		SELECT v.id, v.plate, v.name, v.category, v.owner, v.seats, v.gear, v.daily_rate_cents,
 		       		       v.in_maintenance, v.deposit_cents, v.km_limit_per_day, v.extra_km_cents, v.owner_partner_id,
-		       v.year, v.color, v.fuel, v.doors, array_to_json(v.features), v.description,
+		       v.year, v.color, v.fuel, v.doors, array_to_json(v.features), v.description, v.min_days,
 		       v.created_at, v.updated_at,
 		       CASE
 		           WHEN v.in_maintenance THEN 'manutencao'
@@ -54,15 +54,15 @@ const (
 	queryCreate   = `
 		INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents, in_maintenance,
 		                      		                      deposit_cents, km_limit_per_day, extra_km_cents, owner_partner_id,
-		                      year, color, fuel, doors, features, description)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		                      year, color, fuel, doors, features, description, min_days)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING id`
 	queryUpdate = `
 		UPDATE vehicles
 		SET plate = $2, name = $3, category = $4, owner = $5, seats = $6, gear = $7,
 		    daily_rate_cents = $8, in_maintenance = $9, deposit_cents = $10, km_limit_per_day = $11,
 		    		    extra_km_cents = $12, owner_partner_id = $13,
-		    year = $14, color = $15, fuel = $16, doors = $17, features = $18, description = $19, updated_at = now()
+		    year = $14, color = $15, fuel = $16, doors = $17, features = $18, description = $19, min_days = $20, updated_at = now()
 		WHERE id = $1
 		RETURNING id`
 )
@@ -170,7 +170,7 @@ func (r *FleetRepository) Create(ctx context.Context, n fleet.VehicleRequest) (f
 	err := r.db.QueryRowContext(ctx, queryCreate,
 		n.Plate, n.Name, n.Category, n.Owner, n.Seats, n.Gear, n.DailyRateCents, n.InMaintenance,
 		n.DepositCents, n.KmLimitPerDay, n.ExtraKmCents, n.OwnerPartnerID,
-		n.Year, n.Color, n.Fuel, n.Doors, features(n.Features), n.Description).Scan(&id)
+		n.Year, n.Color, n.Fuel, n.Doors, features(n.Features), n.Description, n.MinDays).Scan(&id)
 	if err := mapError(err, "create vehicle"); err != nil {
 		return fleet.Vehicle{}, err
 	}
@@ -181,7 +181,7 @@ func (r *FleetRepository) Update(ctx context.Context, id string, n fleet.Vehicle
 	err := r.db.QueryRowContext(ctx, queryUpdate,
 		id, n.Plate, n.Name, n.Category, n.Owner, n.Seats, n.Gear, n.DailyRateCents, n.InMaintenance,
 		n.DepositCents, n.KmLimitPerDay, n.ExtraKmCents, n.OwnerPartnerID,
-		n.Year, n.Color, n.Fuel, n.Doors, features(n.Features), n.Description).Scan(&id)
+		n.Year, n.Color, n.Fuel, n.Doors, features(n.Features), n.Description, n.MinDays).Scan(&id)
 	if err := mapError(err, "update vehicle"); err != nil {
 		return fleet.Vehicle{}, err
 	}
@@ -195,11 +195,11 @@ func scanVehicle(s scanner) (fleet.Vehicle, error) {
 	var deposit, extraKm sql.NullInt64
 	var kmLimit sql.NullInt32
 	var ownerPartner sql.NullString
-	var year, doors sql.NullInt32
+	var year, doors, minDays sql.NullInt32
 	var featuresJSON []byte
 	err := s.Scan(&v.ID, &v.Plate, &v.Name, &v.Category, &v.Owner, &v.Seats, &v.Gear,
 		&v.DailyRateCents, &v.InMaintenance, &deposit, &kmLimit, &extraKm, &ownerPartner,
-		&year, &v.Color, &v.Fuel, &doors, &featuresJSON, &v.Description, &v.CreatedAt, &v.UpdatedAt,
+		&year, &v.Color, &v.Fuel, &doors, &featuresJSON, &v.Description, &minDays, &v.CreatedAt, &v.UpdatedAt,
 		&v.Status, &nbID, &nbClient, &nbStart, &nbEnd, &nbStage)
 	if err != nil {
 		return v, err
@@ -207,7 +207,7 @@ func scanVehicle(s scanner) (fleet.Vehicle, error) {
 	if ownerPartner.Valid {
 		v.OwnerPartnerID = &ownerPartner.String
 	}
-	v.Year, v.Doors = nullInt(year), nullInt(doors)
+	v.Year, v.Doors, v.MinDays = nullInt(year), nullInt(doors), nullInt(minDays)
 	v.Features = []string{}
 	if err := json.Unmarshal(featuresJSON, &v.Features); err != nil {
 		return v, fmt.Errorf("decode features: %w", err)
