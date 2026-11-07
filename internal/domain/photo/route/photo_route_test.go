@@ -23,7 +23,7 @@ func TestRegister(t *testing.T) {
 	}
 	for _, want := range []string{"GET /api/vehicles/:id/photos", "POST /api/vehicles/:id/photos", "GET /api/bookings/:id/photos",
 		"POST /api/bookings/:id/photos", "DELETE /api/photos/:id", "POST /api/photos/:id/cover",
-		"GET /api/public/fleet", "GET /api/public/photos/:id/w/:width"} {
+		"GET /api/public/fleet", "GET /api/public/fleet/:id", "GET /api/public/photos/:id/w/:width"} {
 		assert.True(t, got[want], want)
 	}
 }

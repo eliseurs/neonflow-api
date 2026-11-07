@@ -26,5 +26,6 @@ func Register(app *api.App, store photo.Store) {
 	// Site público: só a frota e as fotos de veículo, nunca as da reserva.
 	public := app.API(api.Routes{})
 	public.GET("/public/fleet", h.PublicFleet)
+	public.GET("/public/fleet/:id", h.PublicCar)
 	public.GET("/public/photos/:id/w/:width", h.Variant)
 }

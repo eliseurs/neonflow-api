@@ -2,16 +2,33 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"neonflow-api/internal/domain/fleet"
 )
 
 type FleetService struct {
 	repo fleet.Repository
+	now  func() time.Time
 }
 
 func NewFleetService(repo fleet.Repository) *FleetService {
-	return &FleetService{repo: repo}
+	return &FleetService{repo: repo, now: time.Now}
+}
+
+func (s *FleetService) Comparison(ctx context.Context) ([]fleet.Stats, error) {
+	return s.repo.Stats(ctx, "", s.now().Add(-fleet.StatsWindow))
+}
+
+func (s *FleetService) VehicleStats(ctx context.Context, id string) (fleet.Stats, error) {
+	list, err := s.repo.Stats(ctx, id, s.now().Add(-fleet.StatsWindow))
+	if err != nil {
+		return fleet.Stats{}, err
+	}
+	if len(list) == 0 {
+		return fleet.Stats{}, fleet.ErrVehicleNotFound
+	}
+	return list[0], nil
 }
 
 func (s *FleetService) List(ctx context.Context) ([]fleet.Vehicle, error) {

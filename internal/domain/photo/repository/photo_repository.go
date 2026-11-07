@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -32,14 +33,15 @@ const (
 	queryFind         = `SELECT ` + photoColumns + ` FROM photos WHERE id = $1`
 	queryVehiclePhoto = `SELECT ` + photoColumns + ` FROM photos WHERE id = $1 AND owner_type = 'veiculo'`
 	// Site público: carros fora de manutenção, Economy antes de Premium, com a primeira foto (capa).
-	queryPublicFleet = `
-		SELECT v.id, v.name, v.category, v.seats, v.gear, p.id
+	publicCar = `
+		SELECT v.id, v.name, v.category, v.seats, v.gear, v.year, v.color, v.fuel, v.doors,
+		       array_to_json(v.features), v.description,
+		       coalesce((SELECT json_agg(p.id ORDER BY p.position, p.created_at) FROM photos p
+		                 WHERE p.owner_type = 'veiculo' AND p.owner_id = v.id), '[]')
 		FROM vehicles v
-		LEFT JOIN LATERAL (
-			SELECT id FROM photos WHERE owner_type = 'veiculo' AND owner_id = v.id ORDER BY position, created_at LIMIT 1
-		) p ON true
-		WHERE NOT v.in_maintenance
-		ORDER BY v.category = 'premium', v.name`
+		WHERE NOT v.in_maintenance`
+	queryPublicFleet = publicCar + ` ORDER BY v.category = 'premium', v.name`
+	queryPublicCar   = publicCar + ` AND v.id = $1`
 	// Capa: a escolhida vai para a posição 0 e as demais descem uma.
 	queryCover = `
 		UPDATE photos o SET position = CASE WHEN o.id = $1 THEN 0 ELSE o.position + 1 END
@@ -134,20 +136,52 @@ func (r *PhotoRepository) PublicFleet(ctx context.Context) ([]photo.Car, error) 
 
 	cars := []photo.Car{}
 	for rows.Next() {
-		var c photo.Car
-		var photoID sql.NullString
-		if err := rows.Scan(&c.ID, &c.Name, &c.Category, &c.Seats, &c.Gear, &photoID); err != nil {
+		c, err := scanCar(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan car: %w", err)
 		}
-		if photoID.Valid {
-			c.PhotoID = &photoID.String
-		}
+		c.PhotoIDs = nil // a lista só vai na página do carro
 		cars = append(cars, c)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("public fleet: %w", err)
 	}
 	return cars, nil
+}
+
+func (r *PhotoRepository) PublicCar(ctx context.Context, id string) (photo.Car, error) {
+	c, err := scanCar(r.db.QueryRowContext(ctx, queryPublicCar, id))
+	return c, mapError(err, photo.ErrCarNotFound, "public car")
+}
+
+func scanCar(s scanner) (photo.Car, error) {
+	var c photo.Car
+	var year, doors sql.NullInt32
+	var features, photos []byte
+	err := s.Scan(&c.ID, &c.Name, &c.Category, &c.Seats, &c.Gear, &year, &c.Color, &c.Fuel, &doors,
+		&features, &c.Description, &photos)
+	if err != nil {
+		return c, err
+	}
+	if year.Valid {
+		v := int(year.Int32)
+		c.Year = &v
+	}
+	if doors.Valid {
+		v := int(doors.Int32)
+		c.Doors = &v
+	}
+	c.Features, c.PhotoIDs = []string{}, []string{}
+	if err := json.Unmarshal(features, &c.Features); err != nil {
+		return c, fmt.Errorf("decode features: %w", err)
+	}
+	if err := json.Unmarshal(photos, &c.PhotoIDs); err != nil {
+		return c, fmt.Errorf("decode photos: %w", err)
+	}
+	if len(c.PhotoIDs) > 0 {
+		c.PhotoID = &c.PhotoIDs[0]
+	}
+	return c, nil
 }
 
 func (r *PhotoRepository) VehiclePhoto(ctx context.Context, id string) (photo.Photo, error) {

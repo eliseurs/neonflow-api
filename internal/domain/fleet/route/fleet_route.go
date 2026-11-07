@@ -16,6 +16,8 @@ func Register(app *api.App) {
 
 	g := app.API(api.Routes{Authorization: true, Roles: []string{authentication.RoleAdmin, authentication.RoleCentral}})
 	g.GET("/vehicles", h.List)
+	g.GET("/vehicles/stats", h.Comparison)
+	g.GET("/vehicles/:id/stats", h.Stats)
 	g.GET("/vehicles/:id", h.Get)
 	g.POST("/vehicles", h.Create)
 	g.PUT("/vehicles/:id", h.Update)
