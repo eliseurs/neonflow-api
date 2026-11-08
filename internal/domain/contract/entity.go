@@ -39,19 +39,26 @@ const (
 
 // transition é quem pode fazer a ação e de que situação para qual.
 type transition struct {
-	role string
-	from []string
-	to   string
+	roles []string
+	from  []string
+	to    string
 }
 
+var (
+	admins = []string{authentication.RoleAdmin}
+	// reviewers: até a advogada ter conta, o admin também revisa (decisão de 08/11/2026, PEN-68).
+	// O evento grava o papel de quem agiu, então a aprovação do admin fica visível como tal.
+	reviewers = []string{authentication.RoleLegalReviewer, authentication.RoleAdmin}
+)
+
 var transitions = map[string]transition{
-	ActionEnviar:  {authentication.RoleAdmin, []string{StatusMinuta}, StatusEnviado},
-	ActionAjustes: {authentication.RoleLegalReviewer, []string{StatusEnviado}, StatusAjustes},
-	ActionAprovar: {authentication.RoleLegalReviewer, []string{StatusEnviado}, StatusAprovado},
-	ActionRevogar: {authentication.RoleLegalReviewer, []string{StatusAprovado, StatusLiberado}, StatusEnviado},
-	ActionLiberar: {authentication.RoleAdmin, []string{StatusAprovado}, StatusLiberado},
+	ActionEnviar:  {admins, []string{StatusMinuta}, StatusEnviado},
+	ActionAjustes: {reviewers, []string{StatusEnviado}, StatusAjustes},
+	ActionAprovar: {reviewers, []string{StatusEnviado}, StatusAprovado},
+	ActionRevogar: {reviewers, []string{StatusAprovado, StatusLiberado}, StatusEnviado},
+	ActionLiberar: {admins, []string{StatusAprovado}, StatusLiberado},
 	// Aprovação jurídica não publica sozinha: publicar é decisão posterior do admin.
-	ActionPublicar: {authentication.RoleAdmin, []string{StatusLiberado}, StatusPublicado},
+	ActionPublicar: {admins, []string{StatusLiberado}, StatusPublicado},
 }
 
 type Document struct {
@@ -187,14 +194,10 @@ func Next(req EventRequest, actor Actor, current, versionSHA string) (string, er
 	if !ok {
 		return "", ErrInvalidAction
 	}
-	if actor.Role != t.role {
+	if !contains(t.roles, actor.Role) {
 		return "", ErrForbiddenAction
 	}
-	allowed := false
-	for _, s := range t.from {
-		allowed = allowed || s == current
-	}
-	if !allowed {
+	if !contains(t.from, current) {
 		return "", ErrWrongStatus
 	}
 	if req.Action == ActionAprovar && req.SHA256 != versionSHA {
@@ -206,6 +209,15 @@ func Next(req EventRequest, actor Actor, current, versionSHA string) (string, er
 // CanComment: admin e revisora comentam; a central não participa da revisão.
 func CanComment(role string) bool {
 	return role == authentication.RoleAdmin || role == authentication.RoleLegalReviewer
+}
+
+func contains(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 func Hash(body string) string {

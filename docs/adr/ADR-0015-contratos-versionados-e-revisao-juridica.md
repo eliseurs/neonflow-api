@@ -29,6 +29,7 @@ Opção 2. A situação nunca é gravada numa coluna: é o último evento. Cada 
 ## Consequências
 
 - Boas: a aprovação pode ser auditada pelo hash. O admin não consegue se passar pela revisora, porque o papel vem do JWT e a regra fica no servidor. Corrigir um texto obriga a criar uma versão nova e passar por nova revisão.
+- Exceção temporária (08/11/2026): até a advogada ter conta, o admin também revisa e aprova (RN-08.4). O papel fica gravado em cada evento, então as aprovações do admin podem ser separadas das dela. A exceção tem de sair quando ela entrar (PEN-68).
 - Ruins / riscos: um erro de digitação também vira versão nova. Um admin poderia criar para si um usuário `legal_reviewer`, e isso é controle organizacional (PEN-68). Por enquanto, os textos de contrato convivem com os termos de `terms`.
 
 ## Fontes
