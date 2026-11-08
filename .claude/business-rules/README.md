@@ -25,6 +25,7 @@
 | `05-autorizacao.md` | Autenticação e papéis |
 | `06-condutor-caucao-e-seguro.md` | Requisitos do condutor, caução e seguro no aluguel sem motorista |
 | `07-parceiros.md` | Cadastro de parceiros (proprietário, motorista, indicador) e indicação por link ou QR |
+| `08-contratos.md` | Os seis contratos em versões com hash e a revisão jurídica (pacote V15) |
 
 ---
 

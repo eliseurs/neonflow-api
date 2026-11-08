@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-08] — Contratos V15 e área jurídica (revisão por cláusula)
+
+- Fonte: pasta do Drive `09_CONTRATOS_V15_REVISAO_JURIDICA_E_DEV_2026-11-07` (seis minutas v0.4, especificação DEV e guia da área jurídica). O texto das minutas não entra no Git ("não subir ao Git sem autorização do fundador"): vai pela API.
+- `V20_contracts`: `contract_documents` (os seis, criados na migration), `contract_versions` (texto + SHA-256), `contract_events` e `contract_comments`; triggers append-only recusam UPDATE e DELETE. Papel `legal_reviewer` em `users.role`.
+- Domínio `contract`: situação calculada a partir do último evento (`minuta` → `enviado_para_revisao` → `ajustes_solicitados` | `aprovado_pela_revisora` → `liberacao_administrativa` → `publicado`). A transição trava a versão e confere papel, situação e, na aprovação, o hash lido mais a confirmação expressa. O admin não aprova; a central não acessa. Evento com `clock_timestamp()` para manter a ordem quando há espera pelo lock.
+- Testes: tabela de transições, serviço, handler (autor sempre do JWT), rota (401 sem login, 403 para a central) e integração (fluxo completo, hash antigo recusado, append-only). Smoke local com as seis minutas reais: hashes conferem, admin recebe 403 ao aprovar, hash errado 409, aprovação não publica (409). Cobertura de `internal/` em 95,7%.
+- Regras: RN-08 nova; RN-05.3 com o papel novo; RN-02.3 adota o aceite do padrão V15 (caixa de marcação, hash e método), que será aplicado na Ordem 04. ADR-0015. Pendências novas: PEN-68 (convite e MFA da revisora), PEN-69 (PDF e diferença entre versões), PEN-70 (intermediador × central operando a frota), PEN-71 (campos em branco das minutas).
+
+---
+
 ## [2026-11-06] — Rodada 6 do questionário (cadastro do cliente)
 
 - Respostas registradas: RN-04.4 ganha validade, primeira habilitação, categoria e país da CNH (q99) e confirma a foto (q102); RN-06.7 nova, condutor adicional sem custo com nome, documento e CNH (q101); prazo de retenção ainda não definido (q103), então os documentos seguem fora. RN-06.8 nova (q100, respondida no CLI): o sistema bloqueia a reserva sem motorista de quem não cumpre idade ou tempo de habilitação, quando os documentos entrarem. PEN-48 atualizada.

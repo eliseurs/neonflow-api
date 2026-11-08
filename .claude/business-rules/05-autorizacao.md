@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | RN-05.1 | Toda rota `/api/*`, exceto login e health, exige JWT válido (`Authorization: Bearer`) | implementada | `internal/pkg/middleware/auth.go` | — |
 | RN-05.2 | Não há cadastro aberto: usuários do painel são criados pelo **admin no painel** (`/usuarios`) ou pela CLI `create-admin` | implementada (CLI em 03/11/2026; painel em 06/11/2026) | `internal/domain/user`, `cmd/create-admin` | PEN-14 |
-| RN-05.3 | Papéis do token: `admin` e `central`. Perfis de cliente, motorista, captador e proprietário ainda não existem | implementada (só admin/central) | `internal/pkg/middleware/role_guard.go` | PEN-14, PEN-49 |
+| RN-05.3 | Papéis do token: `admin`, `central` e `legal_reviewer` (revisora jurídica, só nas rotas de contratos, [RN-08.4](08-contratos.md)). Perfis de cliente, motorista, captador e proprietário ainda não existem | implementada (admin/central; legal_reviewer em 08/11/2026, V20) | `internal/pkg/middleware/role_guard.go` | PEN-14, PEN-49 |
 | RN-05.4 | Senhas guardadas com bcrypt. E-mail é único e comparado sem diferenciar maiúsculas | implementada | `internal/pkg/security/hasher.go`, `sql/migrations/V1_initial_schema.up.sql` | — |
 | RN-05.5 | Falha de login responde a mesma mensagem para e-mail inexistente e senha errada | implementada | `internal/domain/authentication/service` | — |
 | RN-05.6 | No início, **só o fundador** (como admin e atendente da central) usa o painel. Parceiros (hotéis, proprietários de veículos, indicadores) e motoristas ganham acesso depois | aprovada (06/11/2026, fundador, q78) | papéis `admin` e `central` já existem | PEN-14 |
