@@ -9,6 +9,8 @@ import (
 const (
 	RoleAdmin   = "admin"
 	RoleCentral = "central"
+	// RoleLegalReviewer é a revisora jurídica dos contratos (06_GUIA_AREA_JURIDICA, pacote V15). Não acessa a operação.
+	RoleLegalReviewer = "legal_reviewer"
 
 	MinPasswordLength = 10
 )
@@ -59,7 +61,7 @@ func NormalizeEmail(email string) string {
 }
 
 func ValidRole(role string) bool {
-	return role == RoleAdmin || role == RoleCentral
+	return role == RoleAdmin || role == RoleCentral || role == RoleLegalReviewer
 }
 
 // Validate normaliza e valida o pedido de criação de usuário.

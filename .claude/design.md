@@ -44,6 +44,7 @@ internal/
     photo/                  # fotos do veículo e da reserva no bucket privado; frota e página pública do carro (RN-01.6 a 01.8, ADR-0014)
     maintenance/            # histórico de manutenção do veículo (RN-01.10)
     terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
+    contract/               # os seis contratos em versões com hash e a revisão jurídica append-only (RN-08, ADR-0015)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
     db/                     # Open (pool + ping)
@@ -115,6 +116,11 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | POST | `/api/bookings/:id/terms-link` | admin, central | Link de aceite (7 dias; só o hash no banco). 409 sem termos ou depois da retirada |
 | GET | `/api/bookings/:id/terms` | admin, central | Último aceite (`null` se não houve) |
 | GET, POST | `/api/public/terms/:token`, `/api/public/terms/:token/accept` | sem login | Página do cliente: resumo da reserva e termos atuais; aceite com `typed_name` e a `version` lida (409 se mudou) |
+| GET | `/api/contracts` | admin, legal_reviewer | Os seis contratos com a última versão (`version`, `label`, `sha256`, `status`) |
+| GET, POST | `/api/contracts/:code/versions` | admin, legal_reviewer; POST só admin | Versões do contrato (mais nova primeiro); POST `{label, body}` cria a próxima versão como `minuta`, com o SHA-256 do texto |
+| GET | `/api/contract-versions/:id` | admin, legal_reviewer | Texto, hash, situação, eventos e comentários da versão |
+| POST | `/api/contract-versions/:id/comments` | admin, legal_reviewer | `{clause, kind (observacao\|correcao), body, proposed_text}`; autor vem do JWT |
+| POST | `/api/contract-versions/:id/events` | admin, legal_reviewer | `{action, note, sha256, confirm}`. Admin: `enviar`, `liberar`, `publicar`. Revisora: `solicitar_ajustes` e `revogar` (com `note`), `aprovar` (com o `sha256` lido e `confirm: true`). 403 papel errado, 409 situação errada ou hash diferente |
 | GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
 | POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
 | GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
@@ -140,7 +146,7 @@ Em "devolvida", as conferências exigidas são `issues` mais as chaves dos itens
 users
   id UUID PK DEFAULT gen_random_uuid()
   name, email, password_hash TEXT NOT NULL
-  role TEXT CHECK (role IN ('admin','central'))
+  role TEXT CHECK (role IN ('admin','central','legal_reviewer'))   -- V20: revisora jurídica
   active BOOL DEFAULT true              -- V8: desativado não entra
   created_at, updated_at TIMESTAMPTZ
   UNIQUE INDEX lower(email)
@@ -171,6 +177,12 @@ photos (V16)                            -- RN-01.6, RN-01.7; arquivo no bucket p
 terms_versions (V17): id, version UNIQUE, body, created_by, created_at        -- RN-02.3
 terms_links (V17): id, booking_id FK, token_hash UNIQUE, expires_at, created_by
 terms_acceptances (V17): id, booking_id FK, version_id FK, link_id FK, typed_name, accepted_at
+
+contract_documents (V20): id, code UNIQUE ('01'..'06'), title          -- RN-08.1, os seis já criados na migration
+contract_versions (V20): id, document_id FK, version, label, body, sha256, created_by, created_at   -- UNIQUE (document_id, version)
+contract_events (V20): id, version_id FK, action, status, note, sha256, user_id FK, role, created_at   -- situação = último evento
+contract_comments (V20): id, version_id FK, clause, kind (observacao|correcao), body, proposed_text, user_id FK, role
+  -- versões, eventos e comentários são append-only: trigger contract_append_only recusa UPDATE e DELETE
 
 customers (V15)                         -- RN-04.7, RN-04.8; sem documentos (PEN-48)
   id, name, whatsapp (dígitos, UNIQUE quando preenchido), email, language CHECK (pt|en), notes

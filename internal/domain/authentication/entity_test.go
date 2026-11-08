@@ -37,5 +37,6 @@ func TestCreateUserRequest_Validate(t *testing.T) {
 func TestValidRole(t *testing.T) {
 	assert.True(t, ValidRole(RoleAdmin))
 	assert.True(t, ValidRole(RoleCentral))
+	assert.True(t, ValidRole(RoleLegalReviewer))
 	assert.False(t, ValidRole("motorista"))
 }

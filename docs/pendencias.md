@@ -1,6 +1,6 @@
 # Registro de pendências
 
-**67 pendências, 15 bloqueantes** (33 resolvidas, 14 parciais, 20 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
+**71 pendências, 16 bloqueantes** (33 resolvidas, 14 parciais, 24 abertas), levantadas em 03/11/2026 a partir do código e da documentação. Fonte única no repositório (`docs/pendencias.md`). A versão para leitura e comentários está no documento "Neon Flow — Pendências do projeto" (Claude Docs).
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
@@ -8,12 +8,12 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 
 | Categoria | Total | Bloqueante | Alta | Média | Baixa |
 | --- | --- | --- | --- | --- | --- |
-| Negócio e regras | 18 | 6 | 10 | 2 | 0 |
+| Negócio e regras | 20 | 7 | 11 | 2 | 0 |
 | Produto e escopo | 16 | 1 | 6 | 9 | 0 |
 | Técnicas | 14 | 4 | 6 | 2 | 2 |
 | Arquitetura e Nexus | 7 | 2 | 3 | 2 | 0 |
 | Documentais | 6 | 0 | 2 | 2 | 2 |
-| Governança e qualidade | 5 | 2 | 2 | 1 | 0 |
+| Governança e qualidade | 7 | 2 | 3 | 2 | 0 |
 
 ## Negócio e regras operacionais
 
@@ -38,6 +38,8 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 | PEN-65 | Hotéis parceiros: acordos existentes, autorização de uso de nome e foto, papel (indicador ou ponto de embarque) | Alta | Fundador | parcial: app nasce com template predefinido, área de parceiros depois ([ADR-0011](adr/ADR-0011-escopo-de-lancamento-e-canais.md), 03/11/2026); fotos ilustrativas por enquanto e cadastro do veículo com fotos (implementado em 06/11/2026, bucket do Railway, [ADR-0014](adr/ADR-0014-armazenamento-de-fotos.md)) ([RN-01.7](../.claude/business-rules/01-frota.md), 06/11/2026, q85); faltam acordos e autorização de uso de nome e foto dos hotéis | Linha visual LuxuryBus, 03/11/2026 |
 | PEN-66 | Informar o número de WhatsApp da central (canal de reserva do ADR-0011) | Alta | Fundador / operação | resolvida em 05/11/2026: +55 51 99719-2854, configurado em `VITE_WHATSAPP_NUMBER` do `neonflow-app` (Railway `hml`); a landing já abre o WhatsApp da central | Landing, 05/11/2026 |
 | PEN-67 | Transfer com carro de parceiro dirigido por outra pessoa: o dono recebe algo pelo uso do carro? Quanto e sobre qual base (preço da corrida, valor fixo)? | Alta | Fundador | aberta: o fundador informou em 06/11/2026 que "nem sempre o motorista do veiculo naquele momento é de fato o proprietário"; o transfer já registra motorista e carro separados (V14), mas só o motorista recebe (RN-03.14) | CLI, 06/11/2026 |
+| PEN-70 | Modelo contratual: as minutas V15 tratam o Neon Flow como **intermediador** e o parceiro como locador contratual (04/1.1, 02), com `owner_id`, `contractual_supplier_id` e `payout_beneficiary_id` separados; hoje a central opera a frota dos parceiros (RN-07, fase 1). Qual modelo vale no lançamento? | Alta | Fundador + jurídico | aberta: a Ordem 04 com os dados da reserva espera esta decisão | Pacote V15 de 07/11/2026 (`09_CONTRATOS_V15_REVISAO_JURIDICA_E_DEV_2026-11-07`), 05_ESPECIFICACAO_DEV |
+| PEN-71 | Preencher os campos em branco das minutas: razão social, CNPJ, endereço, suporte, política de privacidade, seguradora/apólice, política de cancelamento e percentuais (01, 02, 03 e 04) | Bloqueante | Fundador + jurídico | aberta: as seis minutas v0.4 entram na plataforma como estão, com os campos `[A DEFINIR]`; nenhum aceite real até a aprovação e o preenchimento | Pacote V15 de 07/11/2026 (`09_CONTRATOS_V15_REVISAO_JURIDICA_E_DEV_2026-11-07`), pendências de cada minuta |
 
 ## Produto e escopo
 
@@ -111,3 +113,5 @@ Para resolver uma pendência: registre a decisão (ADR ou RN), mude o status par
 | PEN-50 | Parecer jurídico, fiscal e regulatório (locação, transfer, intermediação) | Alta | Fundador + jurídico | resolvida em 04/11/2026 por declaração do fundador: "já consultei, e não precisa". Sem parecer anexado; habilitação estrangeira (RN-06.3): o fundador vai confirmar com o advogado (05/11/2026) | Dossiê C |
 | PEN-51 | QA visual, teclado e acessibilidade | Média | QA | aberta | Dossiê I e K |
 | PEN-52 | Autorização explícita para implementar (o pacote de 09/10 autoriza só documentação) | Alta | Fundador | resolvida em 03/11/2026 ([ADR-0011](adr/ADR-0011-escopo-de-lancamento-e-canais.md)): landing e reserva autorizadas | Dossiê L; 00_LEIA_PRIMEIRO |
+| PEN-68 | Convite da revisora jurídica: hoje o admin cria o usuário `legal_reviewer` com senha (painel ou `create-admin`); o guia pede convite individual sem senha em texto, MFA quando houver e nenhum botão de aprovar valendo em produção antes da homologação | Alta | Engenharia + fundador | aberta: papel e regras de acesso implementados em 08/11/2026 ([RN-08](../.claude/business-rules/08-contratos.md)); falta o convite por e-mail (sem provedor) e o MFA. Dados da Dra. Mônica não são cadastrados por suposição | Pacote V15 de 07/11/2026 (`09_CONTRATOS_V15_REVISAO_JURIDICA_E_DEV_2026-11-07`), 06_GUIA_AREA_JURIDICA |
+| PEN-69 | Relatório de revisão em PDF e diferença entre versões (critérios 7 e 8 do guia) | Média | Engenharia | aberta: a API devolve texto, hash, eventos e comentários de cada versão; o PDF e a comparação ficam para o painel ou um endpoint de exportação | Pacote V15 de 07/11/2026 (`09_CONTRATOS_V15_REVISAO_JURIDICA_E_DEV_2026-11-07`), 06_GUIA_AREA_JURIDICA |

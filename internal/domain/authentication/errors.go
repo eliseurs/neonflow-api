@@ -9,5 +9,5 @@ var (
 	ErrNameRequired       = errors.New("nome é obrigatório")
 	ErrInvalidEmail       = errors.New("e-mail inválido")
 	ErrWeakPassword       = errors.New("a senha deve ter pelo menos 10 caracteres")
-	ErrInvalidRole        = errors.New("papel inválido: use admin ou central")
+	ErrInvalidRole        = errors.New("papel inválido: use admin, central ou legal_reviewer")
 )
