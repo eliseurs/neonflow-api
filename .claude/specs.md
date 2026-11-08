@@ -8,6 +8,13 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-08] — Admin revisa contratos até a advogada ter conta
+
+- Decisão no CLI: a conta da advogada fica para depois, e o admin também pede ajustes, aprova e revoga (`reviewers` em `internal/domain/contract/entity.go`). O evento grava `role: admin`, então essas decisões ficam identificáveis. Hash e confirmação expressa continuam obrigatórios; liberar e publicar seguem só com o admin; a central continua sem acesso.
+- Exceção temporária à regra do guia V15 ("o admin não pode aprovar em nome da revisora"): RN-08.4, PEN-68 e ADR-0015 atualizados. Tem de sair quando a advogada entrar.
+
+---
+
 ## [2026-11-08] — Contratos V15 e área jurídica (revisão por cláusula)
 
 - Fonte: pasta do Drive `09_CONTRATOS_V15_REVISAO_JURIDICA_E_DEV_2026-11-07` (seis minutas v0.4, especificação DEV e guia da área jurídica). O texto das minutas não entra no Git ("não subir ao Git sem autorização do fundador"): vai pela API.

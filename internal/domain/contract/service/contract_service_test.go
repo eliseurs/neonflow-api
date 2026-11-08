@@ -102,7 +102,7 @@ func TestAddEvent(t *testing.T) {
 	assert.Equal(t, contract.StatusAprovado, e.Status)
 	assert.Equal(t, contract.ActionAprovar, repo.action)
 
-	_, err = s.AddEvent(context.Background(), "v", contract.EventRequest{Action: contract.ActionAprovar, SHA256: sha, Confirm: true}, admin)
+	_, err = s.AddEvent(context.Background(), "v", contract.EventRequest{Action: contract.ActionAprovar, SHA256: sha, Confirm: true}, central)
 	assert.ErrorIs(t, err, contract.ErrForbiddenAction)
 	_, err = s.AddEvent(context.Background(), "v", contract.EventRequest{Action: contract.ActionAprovar, SHA256: sha}, reviewer)
 	assert.ErrorIs(t, err, contract.ErrConfirmRequired)

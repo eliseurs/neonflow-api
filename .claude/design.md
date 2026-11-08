@@ -120,7 +120,7 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET, POST | `/api/contracts/:code/versions` | admin, legal_reviewer; POST só admin | Versões do contrato (mais nova primeiro); POST `{label, body}` cria a próxima versão como `minuta`, com o SHA-256 do texto |
 | GET | `/api/contract-versions/:id` | admin, legal_reviewer | Texto, hash, situação, eventos e comentários da versão |
 | POST | `/api/contract-versions/:id/comments` | admin, legal_reviewer | `{clause, kind (observacao\|correcao), body, proposed_text}`; autor vem do JWT |
-| POST | `/api/contract-versions/:id/events` | admin, legal_reviewer | `{action, note, sha256, confirm}`. Admin: `enviar`, `liberar`, `publicar`. Revisora: `solicitar_ajustes` e `revogar` (com `note`), `aprovar` (com o `sha256` lido e `confirm: true`). 403 papel errado, 409 situação errada ou hash diferente |
+| POST | `/api/contract-versions/:id/events` | admin, legal_reviewer | `{action, note, sha256, confirm}`. Admin: `enviar`, `liberar`, `publicar`. Revisora (e o admin, até a advogada ter conta, RN-08.4): `solicitar_ajustes` e `revogar` (com `note`), `aprovar` (com o `sha256` lido e `confirm: true`). 403 papel errado, 409 situação errada ou hash diferente |
 | GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
 | POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
 | GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
