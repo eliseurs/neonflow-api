@@ -74,7 +74,8 @@ func (h *TermsHandler) respond(c *gin.Context, status int, data any, err error, 
 		api.Respond(c, status, data)
 	case errors.Is(err, terms.ErrBookingNotFound), errors.Is(err, terms.ErrLinkNotFound):
 		api.RespondError(c, http.StatusNotFound, err.Error())
-	case errors.Is(err, terms.ErrBodyRequired), errors.Is(err, terms.ErrBodyTooLong), errors.Is(err, terms.ErrInvalidName):
+	case errors.Is(err, terms.ErrBodyRequired), errors.Is(err, terms.ErrBodyTooLong), errors.Is(err, terms.ErrInvalidName),
+		errors.Is(err, terms.ErrConfirmRequired):
 		api.RespondError(c, http.StatusBadRequest, err.Error())
 	case errors.Is(err, terms.ErrNoTerms), errors.Is(err, terms.ErrWrongStage), errors.Is(err, terms.ErrVersionChanged):
 		api.RespondError(c, http.StatusConflict, err.Error())

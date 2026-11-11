@@ -8,6 +8,15 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-08] — Ordem 04 no aceite da reserva (RN-08.10)
+
+- Com uma versão publicada do contrato 04, `GET /public/terms/:token` devolve `order` (versão, título, texto, hash) e o quadro da reserva (local, caução e km além do que já ia), com `quadro_sha256`; `terms` vem nulo. Sem Ordem publicada, nada muda.
+- Aceite da Ordem: `contract_version_id`, `sha256`, `quadro_sha256` e `confirm`; o repository trava a versão publicada e a reserva, recalcula o hash do quadro e grava em `contract_acceptances` (V21, append-only) com o snapshot e o método `link_reserva`. Texto ou quadro diferentes do lido → 409. Com a Ordem publicada, aceite dos termos antigos → 409 (recarregar).
+- `GET /bookings/:id/terms` devolve o último aceite das duas tabelas, com `document` (`termos` ou `ordem_04`).
+- RN-08.10 nova; RN-02.3 marcada como implementada para a Ordem 04. Campos `[A DEFINIR]` e partes da Ordem continuam dependendo de PEN-70 e PEN-71.
+
+---
+
 ## [2026-11-08] — Admin revisa contratos até a advogada ter conta
 
 - Decisão no CLI: a conta da advogada fica para depois, e o admin também pede ajustes, aprova e revoga (`reviewers` em `internal/domain/contract/entity.go`). O evento grava `role: admin`, então essas decisões ficam identificáveis. Hash e confirmação expressa continuam obrigatórios; liberar e publicar seguem só com o admin; a central continua sem acesso.

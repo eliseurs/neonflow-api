@@ -11,4 +11,5 @@ var (
 	ErrLinkNotFound    = errors.New("link inválido ou vencido; peça um novo à central")
 	ErrInvalidName     = errors.New("digite o seu nome completo")
 	ErrVersionChanged  = errors.New("os termos mudaram; recarregue a página e leia de novo")
+	ErrConfirmRequired = errors.New("marque a caixa confirmando que leu e aceita o contrato")
 )

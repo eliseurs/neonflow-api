@@ -23,6 +23,9 @@ type fakeRepo struct {
 	accepted  string
 	acceptVer int
 	createErr error
+	order     *terms.Order
+	orderErr  error
+	orderReq  terms.AcceptRequest
 }
 
 func (f *fakeRepo) Versions(context.Context) ([]terms.Version, error) {
@@ -49,11 +52,16 @@ func (f *fakeRepo) LinkByHash(_ context.Context, hash string) (terms.LinkInfo, e
 	return f.link, f.linkErr
 }
 func (f *fakeRepo) Public(_ context.Context, l terms.LinkInfo) (terms.Public, error) {
-	return terms.Public{ClientName: "Cliente " + l.BookingID}, nil
+	return terms.Public{Quadro: terms.Quadro{ClientName: "Cliente " + l.BookingID}}, nil
 }
 func (f *fakeRepo) Accept(_ context.Context, _ terms.LinkInfo, version int, name string) (terms.Acceptance, error) {
 	f.accepted, f.acceptVer = name, version
 	return terms.Acceptance{Version: version, TypedName: name}, nil
+}
+func (f *fakeRepo) PublishedOrder(context.Context) (*terms.Order, error) { return f.order, f.orderErr }
+func (f *fakeRepo) AcceptOrder(_ context.Context, _ terms.LinkInfo, req terms.AcceptRequest) (terms.Acceptance, error) {
+	f.orderReq = req
+	return terms.Acceptance{Document: terms.DocOrder, Version: 3, SHA256: req.SHA256, TypedName: req.TypedName}, nil
 }
 func (f *fakeRepo) LastAcceptance(context.Context, string) (*terms.Acceptance, error) {
 	return &terms.Acceptance{Version: 1}, nil
@@ -119,4 +127,35 @@ func TestTermsService(t *testing.T) {
 	repo.link.BookingStage = "cancelada"
 	_, err = svc.Accept(ctx, link.Token, terms.AcceptRequest{TypedName: "Ana Teste", Version: 1})
 	assert.ErrorIs(t, err, terms.ErrLinkNotFound, "reserva cancelada não aceita")
+}
+
+func TestTermsService_Order(t *testing.T) {
+	ctx := context.Background()
+	repo := &fakeRepo{stage: "confirmada", order: &terms.Order{VersionID: "cv3", Version: 3, SHA256: "abc"}}
+	svc := NewTermsService(repo)
+
+	// Com a Ordem 04 publicada, o link sai mesmo sem os termos antigos.
+	link, err := svc.CreateLink(ctx, "b1", "u1")
+	require.NoError(t, err)
+	repo.link = terms.LinkInfo{ID: "l1", BookingID: "b1", BookingStage: "confirmada"}
+
+	req := terms.AcceptRequest{TypedName: "Ana Teste", ContractVersionID: "cv3", SHA256: " ABC ", QuadroSHA256: "q1", Confirm: true}
+	acc, err := svc.Accept(ctx, link.Token, req)
+	require.NoError(t, err)
+	assert.Equal(t, terms.DocOrder, acc.Document)
+	assert.Equal(t, "abc", repo.orderReq.SHA256, "hash normalizado")
+
+	req.Confirm = false
+	_, err = svc.Accept(ctx, link.Token, req)
+	assert.ErrorIs(t, err, terms.ErrConfirmRequired, "caixa não marcada")
+
+	// Aceite dos termos antigos depois da Ordem publicada: recarregar.
+	_, err = svc.Accept(ctx, link.Token, terms.AcceptRequest{TypedName: "Ana Teste", Version: 1})
+	assert.ErrorIs(t, err, terms.ErrVersionChanged)
+
+	repo.order, repo.orderErr = nil, errors.New("db")
+	_, err = svc.CreateLink(ctx, "b1", "u1")
+	assert.Error(t, err)
+	_, err = svc.Accept(ctx, link.Token, terms.AcceptRequest{TypedName: "Ana Teste", Version: 1})
+	assert.Error(t, err)
 }

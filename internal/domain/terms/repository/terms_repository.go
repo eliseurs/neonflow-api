@@ -28,13 +28,29 @@ const (
 		SELECT l.id, l.booking_id, b.stage, l.expires_at
 		FROM terms_links l JOIN bookings b ON b.id = l.booking_id
 		WHERE l.token_hash = $1 AND l.expires_at > now()`
-	queryPublic = `
-		SELECT b.client_name, v.name, b.start_at, b.end_at, b.total_cents
+	queryQuadro = `
+		SELECT b.client_name, v.name, b.place, b.start_at, b.end_at, b.total_cents,
+			b.deposit_cents, b.km_limit_per_day, b.extra_km_cents
 		FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id WHERE b.id = $1`
+	// A última versão do contrato 04 cuja situação (último evento) é "publicado" (RN-08.3, RN-08.7).
+	queryPublishedOrder = `
+		SELECT v.id, v.version, v.label, d.title, v.body, v.sha256
+		FROM contract_versions v JOIN contract_documents d ON d.id = v.document_id
+		WHERE d.code = $1 AND (SELECT e.status FROM contract_events e WHERE e.version_id = v.id
+			ORDER BY e.created_at DESC, e.id DESC LIMIT 1) = 'publicado'
+		ORDER BY v.version DESC LIMIT 1`
 	queryLast = `
-		SELECT tv.version, a.typed_name, a.accepted_at
-		FROM terms_acceptances a JOIN terms_versions tv ON tv.id = a.version_id
-		WHERE a.booking_id = $1 ORDER BY a.accepted_at DESC LIMIT 1`
+		SELECT document, version, sha256, typed_name, accepted_at FROM (
+			SELECT 'termos' AS document, tv.version, '' AS sha256, a.typed_name, a.accepted_at
+			FROM terms_acceptances a JOIN terms_versions tv ON tv.id = a.version_id WHERE a.booking_id = $1
+			UNION ALL
+			SELECT 'ordem_04', cv.version, ca.body_sha256, ca.typed_name, ca.accepted_at
+			FROM contract_acceptances ca JOIN contract_versions cv ON cv.id = ca.version_id WHERE ca.booking_id = $1
+		) x ORDER BY accepted_at DESC LIMIT 1`
+	queryAcceptOrder = `
+		INSERT INTO contract_acceptances (booking_id, version_id, link_id, body_sha256, snapshot, snapshot_sha256,
+			typed_name, confirmed, method)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8) RETURNING accepted_at`
 	queryAccept = `
 		INSERT INTO terms_acceptances (booking_id, version_id, link_id, typed_name)
 		VALUES ($1, $2, $3, $4) RETURNING accepted_at`
@@ -111,13 +127,22 @@ func (r *TermsRepository) LinkByHash(ctx context.Context, hash string) (terms.Li
 
 func (r *TermsRepository) Public(ctx context.Context, link terms.LinkInfo) (terms.Public, error) {
 	p := terms.Public{ExpiresAt: link.ExpiresAt.In(timezone.Location)}
-	err := r.db.QueryRowContext(ctx, queryPublic, link.BookingID).Scan(&p.ClientName, &p.VehicleName, &p.StartAt, &p.EndAt, &p.TotalCents)
-	if err != nil {
-		return p, mapNotFound(err, terms.ErrLinkNotFound, "terms booking")
-	}
-	p.StartAt, p.EndAt = p.StartAt.In(timezone.Location), p.EndAt.In(timezone.Location)
-	if p.Terms, err = r.Current(ctx); err != nil {
+	var err error
+	if p.Quadro, err = r.quadro(ctx, r.db, link.BookingID); err != nil {
 		return p, err
+	}
+	if p.QuadroSHA256, _, err = p.Quadro.Hash(); err != nil {
+		return p, err
+	}
+	if p.Order, err = r.PublishedOrder(ctx); err != nil {
+		return p, err
+	}
+	if p.Order == nil {
+		current, err := r.Current(ctx)
+		if err != nil {
+			return p, err
+		}
+		p.Terms = &current
 	}
 	if p.Accepted, err = r.LastAcceptance(ctx, link.BookingID); err != nil {
 		return p, err
@@ -145,7 +170,7 @@ func (r *TermsRepository) Accept(ctx context.Context, link terms.LinkInfo, versi
 	if current != version {
 		return terms.Acceptance{}, terms.ErrVersionChanged
 	}
-	a := terms.Acceptance{Version: version, TypedName: typedName}
+	a := terms.Acceptance{Document: terms.DocTerms, Version: version, TypedName: typedName}
 	if err := tx.QueryRowContext(ctx, queryAccept, link.BookingID, currentID, link.ID, typedName).Scan(&a.AcceptedAt); err != nil {
 		return terms.Acceptance{}, fmt.Errorf("accept terms: %w", err)
 	}
@@ -159,9 +184,97 @@ func (r *TermsRepository) Accept(ctx context.Context, link terms.LinkInfo, versi
 	return a, nil
 }
 
+func (r *TermsRepository) PublishedOrder(ctx context.Context) (*terms.Order, error) {
+	return r.publishedOrder(ctx, r.db, "")
+}
+
+// AcceptOrder confere, na mesma transação, que a Ordem publicada e o quadro da reserva são os lidos.
+func (r *TermsRepository) AcceptOrder(ctx context.Context, link terms.LinkInfo, req terms.AcceptRequest) (terms.Acceptance, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return terms.Acceptance{}, fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	order, err := r.publishedOrder(ctx, tx, " FOR SHARE OF v")
+	if err != nil {
+		return terms.Acceptance{}, err
+	}
+	if order == nil || order.VersionID != req.ContractVersionID || order.SHA256 != req.SHA256 {
+		return terms.Acceptance{}, terms.ErrVersionChanged
+	}
+	// Trava a reserva para o quadro não mudar entre a conferência e o aceite.
+	if _, err := tx.ExecContext(ctx, `SELECT 1 FROM bookings WHERE id = $1 FOR UPDATE`, link.BookingID); err != nil {
+		return terms.Acceptance{}, fmt.Errorf("lock booking: %w", err)
+	}
+	q, err := r.quadro(ctx, tx, link.BookingID)
+	if err != nil {
+		return terms.Acceptance{}, err
+	}
+	qSHA, snapshot, err := q.Hash()
+	if err != nil {
+		return terms.Acceptance{}, err
+	}
+	if qSHA != req.QuadroSHA256 {
+		return terms.Acceptance{}, terms.ErrVersionChanged
+	}
+	a := terms.Acceptance{Document: terms.DocOrder, Version: order.Version, SHA256: order.SHA256, TypedName: req.TypedName}
+	if err := tx.QueryRowContext(ctx, queryAcceptOrder, link.BookingID, order.VersionID, link.ID, order.SHA256,
+		snapshot, qSHA, req.TypedName, terms.MethodLink).Scan(&a.AcceptedAt); err != nil {
+		return terms.Acceptance{}, fmt.Errorf("accept order: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, queryMarkTerms, link.BookingID); err != nil {
+		return terms.Acceptance{}, fmt.Errorf("mark terms: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return terms.Acceptance{}, fmt.Errorf("commit: %w", err)
+	}
+	a.AcceptedAt = a.AcceptedAt.In(timezone.Location)
+	return a, nil
+}
+
+type queryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func (r *TermsRepository) publishedOrder(ctx context.Context, q queryer, lock string) (*terms.Order, error) {
+	var o terms.Order
+	err := q.QueryRowContext(ctx, queryPublishedOrder+lock, terms.OrderCode).Scan(&o.VersionID, &o.Version, &o.Label, &o.Title, &o.Body, &o.SHA256)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("published order: %w", err)
+	}
+	return &o, nil
+}
+
+func (r *TermsRepository) quadro(ctx context.Context, q queryer, bookingID string) (terms.Quadro, error) {
+	var qd terms.Quadro
+	var deposit, extraKm sql.NullInt64
+	var kmLimit sql.NullInt32
+	err := q.QueryRowContext(ctx, queryQuadro, bookingID).Scan(&qd.ClientName, &qd.VehicleName, &qd.Place, &qd.StartAt, &qd.EndAt,
+		&qd.TotalCents, &deposit, &kmLimit, &extraKm)
+	if err != nil {
+		return qd, mapNotFound(err, terms.ErrLinkNotFound, "terms booking")
+	}
+	qd.StartAt, qd.EndAt = qd.StartAt.In(timezone.Location), qd.EndAt.In(timezone.Location)
+	if deposit.Valid {
+		qd.DepositCents = &deposit.Int64
+	}
+	if kmLimit.Valid {
+		v := int(kmLimit.Int32)
+		qd.KmLimitPerDay = &v
+	}
+	if extraKm.Valid {
+		qd.ExtraKmCents = &extraKm.Int64
+	}
+	return qd, nil
+}
+
 func (r *TermsRepository) LastAcceptance(ctx context.Context, bookingID string) (*terms.Acceptance, error) {
 	var a terms.Acceptance
-	err := r.db.QueryRowContext(ctx, queryLast, bookingID).Scan(&a.Version, &a.TypedName, &a.AcceptedAt)
+	err := r.db.QueryRowContext(ctx, queryLast, bookingID).Scan(&a.Document, &a.Version, &a.SHA256, &a.TypedName, &a.AcceptedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

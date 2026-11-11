@@ -115,7 +115,7 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/terms`; POST `/api/terms` | admin, central; POST só admin | Versões dos termos; publicar cria a próxima versão |
 | POST | `/api/bookings/:id/terms-link` | admin, central | Link de aceite (7 dias; só o hash no banco). 409 sem termos ou depois da retirada |
 | GET | `/api/bookings/:id/terms` | admin, central | Último aceite (`null` se não houve) |
-| GET, POST | `/api/public/terms/:token`, `/api/public/terms/:token/accept` | sem login | Página do cliente: resumo da reserva e termos atuais; aceite com `typed_name` e a `version` lida (409 se mudou) |
+| GET, POST | `/api/public/terms/:token`, `/api/public/terms/:token/accept` | sem login | Página do cliente: quadro da reserva (com `quadro_sha256`) e a Ordem 04 publicada (`order`) ou, sem ela, os termos atuais (`terms`). Aceite dos termos: `typed_name` e `version`. Aceite da Ordem: `typed_name`, `contract_version_id`, `sha256`, `quadro_sha256` e `confirm: true` (409 se o texto ou o quadro mudaram; 400 sem a caixa) |
 | GET | `/api/contracts` | admin, legal_reviewer | Os seis contratos com a última versão (`version`, `label`, `sha256`, `status`) |
 | GET, POST | `/api/contracts/:code/versions` | admin, legal_reviewer; POST só admin | Versões do contrato (mais nova primeiro); POST `{label, body}` cria a próxima versão como `minuta`, com o SHA-256 do texto |
 | GET | `/api/contract-versions/:id` | admin, legal_reviewer | Texto, hash, situação, eventos e comentários da versão |
@@ -183,6 +183,7 @@ contract_versions (V20): id, document_id FK, version, label, body, sha256, creat
 contract_events (V20): id, version_id FK, action, status, note, sha256, user_id FK, role, created_at   -- situação = último evento
 contract_comments (V20): id, version_id FK, clause, kind (observacao|correcao), body, proposed_text, user_id FK, role
   -- versões, eventos e comentários são append-only: trigger contract_append_only recusa UPDATE e DELETE
+contract_acceptances (V21): id, booking_id FK, version_id FK, link_id FK, body_sha256, snapshot JSONB, snapshot_sha256, typed_name, confirmed, method, accepted_at   -- RN-08.10, append-only
 
 customers (V15)                         -- RN-04.7, RN-04.8; sem documentos (PEN-48)
   id, name, whatsapp (dígitos, UNIQUE quando preenchido), email, language CHECK (pt|en), notes
