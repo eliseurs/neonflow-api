@@ -3,6 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > After every change, update `.claude/specs.md` with what was modified.
+> Mudou um fluxo que o usuário vê (etapa, conferência, regra, valor, bloqueio)? Atualize no mesmo ciclo o artigo da Central de Ajuda em `../neonflow-app/src/modules/help/content/` (regra em `../neonflow-app/.claude/rules.md`, "Central de Ajuda").
 
 ## Reference files
 
