@@ -32,7 +32,7 @@ TEST_DATABASE_URL=postgres://neonflow:neonflow@localhost:5432/neonflow_test?sslm
 
 ## Estado
 
-Scaffold com autenticação. Frota e reservas aguardam decisões de negócio: [docs/pendencias.md](docs/pendencias.md) (52 pendências, 15 bloqueantes) e [docs/plano-reserva-persistente.md](docs/plano-reserva-persistente.md).
+Frota, reservas, transfer, clientes, parceiros, repasses e contratos implementados e operados pela central; o estado detalhado está em [.claude/CLAUDE.md](.claude/CLAUDE.md). O que falta decidir e fazer: [docs/decisoes.md](docs/decisoes.md) e [docs/pendencias.md](docs/pendencias.md).
 
 ## Documentação
 

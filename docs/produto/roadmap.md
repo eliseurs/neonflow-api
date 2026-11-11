@@ -1,5 +1,7 @@
 # Roadmap proposto
 
+> **Defasado em 11/11/2026:** as fases 1 a 3 já foram em boa parte construídas sem esperar a fase 0 (PEN-52, ADR-0009). A sequência atual são os sete pacotes do fundador, em [pendencias.md](../pendencias.md) e [decisoes.md](../decisoes.md); falta ele confirmar a ordem (PEN-20).
+
 **Status: proposta não aprovada** (PEN-20). A ordem depende do que já existir no Nexus/Replit (PEN-35, PEN-36) e de autorização para implementar (PEN-52).
 
 ```mermaid

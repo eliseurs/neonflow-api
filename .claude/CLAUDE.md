@@ -14,7 +14,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `.claude/style.md` | When writing any code (Go, SQL) |
 | `.claude/specs.md` | To understand recent changes and in-progress plans |
 | `.claude/business-rules/` | Before touching frota, reservas, financeiro, integrações or auth |
-| `docs/pendencias.md` | Before implementing any business rule — 65 items, 15 blocking |
+| `docs/pendencias.md` | Before implementing any business rule — registro das PEN (contagem no cabeçalho) |
+| `docs/decisoes.md` | O que falta decidir, o que falta fazer e o que está feito, por severidade |
 | `docs/adr/` | Architecture decisions (MADR) |
 
 Frontend: repositório irmão `../neonflow-app` (React). Protótipo congelado: `../neonflow-app/prototipo`.

@@ -2,7 +2,8 @@
 
 | Documento | Conteúdo |
 |---|---|
-| [pendencias.md](pendencias.md) | 52 pendências (15 bloqueantes) com status |
+| [pendencias.md](pendencias.md) | Registro das pendências (PEN) com status; a contagem fica no cabeçalho do arquivo |
+| [decisoes.md](decisoes.md) | O que falta decidir, o que falta fazer e o que está feito, por severidade |
 | [plano-reserva-persistente.md](plano-reserva-persistente.md) | Próximo incremento: frota + reservas |
 | [adr/](adr/README.md) | Decisões de arquitetura (MADR) |
 | [produto/](produto/visao.md) | Visão, stakeholders, perfis, jornada, roadmap, métricas, glossário |
