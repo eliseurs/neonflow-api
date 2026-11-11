@@ -30,10 +30,17 @@ func (s *TermsService) Publish(ctx context.Context, body, userID string) (terms.
 	return s.repo.CreateVersion(ctx, valid, userID)
 }
 
-// CreateLink gera o link de aceite da reserva, se houver termos publicados e a retirada não aconteceu.
+// CreateLink gera o link de aceite da reserva, se houver o que aceitar (Ordem 04 publicada ou termos)
+// e a retirada não aconteceu.
 func (s *TermsService) CreateLink(ctx context.Context, bookingID, userID string) (terms.Link, error) {
-	if _, err := s.repo.Current(ctx); err != nil {
+	order, err := s.repo.PublishedOrder(ctx)
+	if err != nil {
 		return terms.Link{}, err
+	}
+	if order == nil {
+		if _, err := s.repo.Current(ctx); err != nil {
+			return terms.Link{}, err
+		}
 	}
 	stage, err := s.repo.BookingStage(ctx, bookingID)
 	if err != nil {
@@ -78,6 +85,17 @@ func (s *TermsService) Accept(ctx context.Context, token string, req terms.Accep
 	}
 	if !terms.LinkAllowed(link.BookingStage) {
 		return terms.Acceptance{}, terms.ErrLinkNotFound
+	}
+	if valid.IsOrder() {
+		return s.repo.AcceptOrder(ctx, link, valid)
+	}
+	// Com a Ordem 04 publicada, os termos antigos não valem mais: a página tem de ser recarregada.
+	order, err := s.repo.PublishedOrder(ctx)
+	if err != nil {
+		return terms.Acceptance{}, err
+	}
+	if order != nil {
+		return terms.Acceptance{}, terms.ErrVersionChanged
 	}
 	return s.repo.Accept(ctx, link, valid.Version, valid.TypedName)
 }

@@ -90,6 +90,7 @@ func TestTermsHandler(t *testing.T) {
 		{terms.ErrBodyRequired, http.StatusBadRequest},
 		{terms.ErrBodyTooLong, http.StatusBadRequest},
 		{terms.ErrInvalidName, http.StatusBadRequest},
+		{terms.ErrConfirmRequired, http.StatusBadRequest},
 		{terms.ErrNoTerms, http.StatusConflict},
 		{terms.ErrWrongStage, http.StatusConflict},
 		{terms.ErrVersionChanged, http.StatusConflict},

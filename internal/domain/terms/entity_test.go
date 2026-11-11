@@ -44,3 +44,34 @@ func TestTokenAndStage(t *testing.T) {
 	assert.False(t, LinkAllowed("em_locacao"))
 	assert.False(t, LinkAllowed("cancelada"))
 }
+
+func TestAcceptRequestValidate_Order(t *testing.T) {
+	ok := AcceptRequest{TypedName: " Ana  Teste ", ContractVersionID: " cv ", SHA256: " AB ", QuadroSHA256: " CD ", Confirm: true}
+	r, err := ok.Validate()
+	require.NoError(t, err)
+	assert.True(t, r.IsOrder())
+	assert.Equal(t, "cv", r.ContractVersionID)
+	assert.Equal(t, "ab", r.SHA256)
+	assert.Equal(t, "cd", r.QuadroSHA256)
+
+	noConfirm := ok
+	noConfirm.Confirm = false
+	_, err = noConfirm.Validate()
+	assert.ErrorIs(t, err, ErrConfirmRequired)
+	noHash := ok
+	noHash.QuadroSHA256 = ""
+	_, err = noHash.Validate()
+	assert.ErrorIs(t, err, ErrVersionChanged)
+}
+
+func TestQuadroHash(t *testing.T) {
+	km := 200
+	q := Quadro{ClientName: "Ana Teste", TotalCents: 100, KmLimitPerDay: &km}
+	h1, b, err := q.Hash()
+	require.NoError(t, err)
+	assert.Len(t, h1, 64)
+	assert.Contains(t, string(b), `"km_limit_per_day":200`)
+	q.TotalCents = 101
+	h2, _, _ := q.Hash()
+	assert.NotEqual(t, h1, h2, "mudar o quadro muda o hash")
+}
