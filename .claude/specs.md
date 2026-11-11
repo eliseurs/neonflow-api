@@ -8,6 +8,20 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-11] — Pedidos do fundador (sete pacotes) nas pendências
+
+- O `pendencias.md` da raiz (texto do fundador com sete pacotes de evolução) foi mesclado em `docs/pendencias.md`, que volta a ser o único arquivo: seção "Pedidos do fundador de 11/11/2026", com cada pedido confrontado com o que existe na API e no app, e o texto original no fim.
+- Pendências novas, todas de decisão do fundador: PEN-72 (aluguel com motorista na entrada do site), PEN-73 (pedido do site bloqueia ao chegar ou ao confirmar), PEN-74 (motorista aceita a corrida por conta própria), PEN-75 ("assinar digitalmente"), PEN-76 (comissão por serviço e base do percentual do indicador) e PEN-77 (canal de retorno ao cliente). Total: 77.
+- Nenhuma regra de negócio nem código mudou.
+
+### Conferência das 77 pendências (mesmo dia)
+
+- Todas conferidas contra o código da API, o app, as regras e os ADRs. Encerradas: PEN-05 (ordem e provedor decididos; assinatura segue na PEN-75), PEN-07 e PEN-08 (o que falta segue em PEN-74, PEN-14, PEN-76 e PEN-65), PEN-33 e PEN-46 (protótipo congelado), PEN-43 (superada) e PEN-44 (ADR-0002). PEN-30 passou a parcial e aponta para a API. Texto atualizado em PEN-11, 16, 17, 20, 34, 63 e 64. Registro: 40 resolvidas, 11 parciais, 26 abertas; 7 bloqueantes em aberto.
+- `docs/decisoes.md` (novo): as 77 por estado (falta decidir, falta fazer, decidido e feito) e severidade, mais os pontos em aberto sem PEN. As revisões de severidade (PEN-03, 35, 36, 49, 42) e as reaberturas (PEN-59, PEN-50) ficaram só como proposta na seção 2, sem aplicar.
+- Defasados corrigidos: contagens antigas saíram de `README.md`, `docs/README.md` e `.claude/CLAUDE.md`; aviso em `docs/produto/roadmap.md` e em "Bloqueios" de `docs/plano-reserva-persistente.md`; o cabeçalho do registro deixou de citar o documento de leitura do Claude Docs, parado desde 03/11.
+
+---
+
 ## [2026-11-08] — Ordem 04 no aceite da reserva (RN-08.10)
 
 - Com uma versão publicada do contrato 04, `GET /public/terms/:token` devolve `order` (versão, título, texto, hash) e o quadro da reserva (local, caução e km além do que já ia), com `quadro_sha256`; `terms` vem nulo. Sem Ordem publicada, nada muda.

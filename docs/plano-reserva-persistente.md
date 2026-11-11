@@ -69,4 +69,6 @@ Valores e prazos (tarifa, TTL da pré-reserva) ficam como variáveis até a apro
 
 ## Bloqueios
 
+> **Defasado em 11/11/2026:** o núcleo foi implementado em 05/11/2026 com autorização do fundador (PEN-52) sem esperar PEN-35, PEN-36 e PEN-49, que seguem abertas. O estado de cada pendência está em [decisoes.md](decisoes.md).
+
 Esta SPEC só sai de `bloqueada` quando estiverem resolvidas: PEN-01 a PEN-06 (regras), PEN-35 e PEN-36 (donos no Nexus/Replit), PEN-40 (stack), PEN-48 e PEN-49 (LGPD e isolamento) e PEN-52 (autorização).
