@@ -7,8 +7,8 @@ Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessári
 | Estado | Bloqueante | Alta | Média | Baixa | Total |
 | --- | --- | --- | --- | --- | --- |
 | [1. Falta decidir](#1-falta-decidir) | 4 | 9 | 6 | 0 | 19 |
-| [3. Decidido ou sem decisão pendente, falta fazer](#3-falta-fazer) | 3 | 9 | 5 | 1 | 18 |
-| [4. Decidido e feito](#4-decidido-e-feito) | 9 | 21 | 9 | 3 | 42 |
+| [3. Decidido ou sem decisão pendente, falta fazer](#3-falta-fazer) | 3 | 8 | 5 | 1 | 17 |
+| [4. Decidido e feito](#4-decidido-e-feito) | 9 | 22 | 9 | 3 | 43 |
 
 A seção [2](#2-revisões-de-classificação-propostas) lista mudanças de severidade e reaberturas propostas na conferência, **ainda não aplicadas** ao registro.
 
@@ -35,7 +35,7 @@ Alguém precisa responder ou informar algo antes de haver o que implementar.
 | PEN-70 | Modelo contratual do lançamento: Neon Flow intermediador (parceiro é o locador) ou central operando a frota | Fundador + jurídico | Ordem 04 preenchida com os dados da reserva; situação do cadastro do veículo |
 | PEN-67 | Transfer com carro de parceiro dirigido por outra pessoa: o dono recebe? Quanto e sobre qual base? | Fundador | Repasse do transfer (hoje só o motorista recebe) |
 | PEN-65 | Acordos com hotéis e autorização de uso de nome e foto | Fundador | Comissão de hotel com acordo válido (RN-03.2); divulgação com parceiros |
-| PEN-14 | Decidido em 16/11/2026 o que o parceiro vê (RN-07.8 a 07.11) e o que o cliente faz (RN-02.33 a 02.37). Resta o aceite da corrida pelo motorista (PEN-74, decidido: oferta aberta) | Produto | Aceite pelo motorista (PEN-74) |
+| PEN-14 | Decidido em 16/11/2026 o que o parceiro vê (RN-07.8 a 07.11), o que o cliente faz (RN-02.33 a 02.37) e o aceite pelo motorista (PEN-74). Fica aberto só o que outros perfis venham a ter | Produto | — |
 | PEN-11 | Metas dos indicadores | Fundador | Medir antes de expandir (`produto/metricas.md` com metas em branco) |
 | PEN-37 | Namespace técnico `neoflow` × `neonflow` ([ADR-0005](adr/ADR-0005-namespace-tecnico.md), não decidido) | Fundador + arquitetura | Integração com o Nexus; nenhum código cria namespace até lá |
 
@@ -102,7 +102,6 @@ Já decidido, ou não depende de decisão: é trabalho de engenharia, produto ou
 | PEN-68 | Convite individual e MFA da revisora jurídica; retirar a exceção que deixa o admin aprovar (RN-08.4) | Conta da advogada (o envio de e-mail existe desde 16/11/2026, ADR-0016) |
 | PEN-38 | Especificar os contratos de integração com Shell e Nexus | PEN-35 |
 | PEN-42 | Localizar `NEON_FLOW_cartao_executivo.pdf` | Fundador |
-| PEN-74 | Oferta aberta do transfer: a corrida aparece para todos os motoristas ativos na área do parceiro e o primeiro que aceitar leva (decidido em 16/11/2026, revê a RN-02.30) | PEN-14 (o que o motorista vê) |
 | PEN-78 | Verificar no Resend um domínio do Neon Flow para o remetente; sem ele nenhum e-mail chega a clientes e parceiros | Fundador (domínio e DNS) |
 
 Sem PEN própria, decidido e ainda não implementado:
@@ -157,6 +156,7 @@ Sem PEN própria: mostrar o dólar como conversão no site (ADR-0013, PEN-63), q
 
 | PEN | O que foi decidido | Feito |
 | --- | --- | --- |
+| PEN-74 | Oferta aberta: o primeiro motorista que aceita leva; ele mesmo pode desistir; aviso pela central no WhatsApp (RN-02.30, RN-02.31, 16/11/2026) | Sim na API; telas no app a fazer |
 | PEN-73 | Pedido do site não bloqueia; bloqueia quando a central confirma e a reserva nasce (RN-02.33, 16/11/2026) | Sim na API; telas no app a fazer |
 | PEN-77 | Retorno por e-mail, Minha conta e botão de WhatsApp na central (RN-02.36, 16/11/2026) | E-mail e histórico na API; telas e botão no app a fazer |
 | PEN-07 | Transfer: 60 min inclusos, espera extra cobrada, primeiro que aceita leva, oferta que só aumenta, desistência sem penalidade | Sim; aceite pelo motorista segue na PEN-74 |

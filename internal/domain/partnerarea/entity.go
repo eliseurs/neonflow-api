@@ -64,6 +64,24 @@ type Ride struct {
 	Payout      *Payout   `json:"payout"`
 }
 
+// Offer é a corrida aberta a todos os motoristas ativos, com o valor que a central ofereceu (RN-02.30
+// revista, PEN-74). O primeiro que aceitar leva.
+type Offer struct {
+	ID          string    `json:"id"`
+	PickupAt    time.Time `json:"pickup_at"`
+	Origin      string    `json:"origin"`
+	Destination string    `json:"destination"`
+	Flight      string    `json:"flight"`
+	Passengers  int       `json:"passengers"`
+	ClientName  string    `json:"client_name"`
+	OfferCents  int64     `json:"offer_cents"`
+}
+
+// AcceptRequest: o carro da corrida é opcional e, se vier, precisa ser do motorista.
+type AcceptRequest struct {
+	VehicleID string `json:"vehicle_id"`
+}
+
 // Referral é uma indicação do parceiro: serviço, data, situação e comissão, sem o cliente (RN-07.11).
 type Referral struct {
 	ID     string    `json:"id"`
@@ -79,6 +97,7 @@ type Area struct {
 	Vehicles  []Vehicle  `json:"vehicles"`
 	Bookings  []Booking  `json:"bookings"`
 	Rides     []Ride     `json:"rides"`
+	Offers    []Offer    `json:"offers"`
 	Referrals []Referral `json:"referrals"`
 }
 

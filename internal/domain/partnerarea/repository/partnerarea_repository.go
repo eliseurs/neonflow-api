@@ -39,6 +39,13 @@ const (
 		LEFT JOIN partner_payouts pp ON pp.transfer_id = t.id AND pp.kind = 'motorista' AND pp.partner_id = $1
 		WHERE t.driver_partner_id = $1
 		ORDER BY t.pickup_at DESC LIMIT $2`
+	// Oferta aberta (PEN-74): corridas aguardando motorista com o valor da central, as mais próximas primeiro.
+	queryOffers = `
+		SELECT id, pickup_at, origin, destination, flight, passengers, client_name, offer_cents
+		FROM transfers
+		WHERE stage = 'aguardando_motorista' AND offer_cents IS NOT NULL
+		ORDER BY pickup_at LIMIT $1`
+	queryOwnsVehicle = `SELECT EXISTS (SELECT 1 FROM vehicles WHERE id = $1 AND owner_partner_id = $2)`
 	// Indicações (RN-07.11): reservas e transfers com o parceiro em "Indicado por", sem o cliente.
 	queryReferrals = `
 		SELECT * FROM (
@@ -124,6 +131,26 @@ func (r *PartnerAreaRepository) Referrals(ctx context.Context, partnerID string)
 		ref.Payout = p.value()
 		return ref, err
 	})
+}
+
+func (r *PartnerAreaRepository) Offers(ctx context.Context) ([]partnerarea.Offer, error) {
+	return list(ctx, r.db, "partner offers", queryOffers, []any{limit}, func(s scanner) (partnerarea.Offer, error) {
+		var o partnerarea.Offer
+		return o, s.Scan(&o.ID, &o.PickupAt, &o.Origin, &o.Destination, &o.Flight, &o.Passengers, &o.ClientName, &o.OfferCents)
+	})
+}
+
+func (r *PartnerAreaRepository) OwnsVehicle(ctx context.Context, partnerID, vehicleID string) (bool, error) {
+	var owns bool
+	err := r.db.QueryRowContext(ctx, queryOwnsVehicle, vehicleID, partnerID).Scan(&owns)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == invalidTextRepresentation {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("owns vehicle: %w", err)
+	}
+	return owns, nil
 }
 
 // payoutRow lê as colunas do pagamento, que vêm nulas enquanto ele não foi gerado.
