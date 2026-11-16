@@ -8,6 +8,17 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-16] — Oferta aberta do transfer (PEN-74)
+
+Decisões do fundador no CLI: a oferta mostra tudo, inclusive o nome do cliente; o motorista desiste pelo próprio app; sem aviso automático por enquanto (a central avisa pelo WhatsApp e a oferta aparece na área do motorista).
+
+- `GET /api/partner/area` traz `offers` para o motorista: corridas em "aguardando motorista" com o valor definido pela central.
+- `POST /api/partner/rides/:id/accept` (carro opcional, só um dos dele) e `/release` (só a corrida dele, antes de começar). Os dois usam o `TransferService` da central: mesma trava, mesmo valor, mesmo histórico ("aceito", "desistiu"). Dois aceites simultâneos: um leva, o outro recebe 409 "esta corrida não está mais disponível".
+- Testes: serviço, handler, rota e integração com dois motoristas aceitando ao mesmo tempo (repetido 5 vezes), desistência e volta à oferta. Cobertura de `internal/`: 95,2%.
+- Regras: RN-02.30 e RN-02.31 com a implementação, RN-07.10; PEN-74 resolvida.
+
+---
+
 ## [2026-11-16] — Área do parceiro (RN-07.8 a 07.11)
 
 Decisões do fundador no CLI: o proprietário vê datas e valores sem o cliente; o motorista vê tudo para executar a corrida (com o nome do cliente, sem o telefone); o indicador vê serviço, data e comissão; os valores mostram a base e o percentual.

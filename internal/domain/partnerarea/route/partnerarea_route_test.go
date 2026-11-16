@@ -20,6 +20,14 @@ func TestRegister(t *testing.T) {
 	app := api.New(config.Configs{JWTSecret: "s", JWTExpiryHours: 1}, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	Register(app)
 
+	got := map[string]bool{}
+	for _, r := range app.Router().Routes() {
+		got[r.Method+" "+r.Path] = true
+	}
+	for _, want := range []string{"GET /api/partner/area", "POST /api/partner/rides/:id/accept", "POST /api/partner/rides/:id/release"} {
+		assert.True(t, got[want], want)
+	}
+
 	w := httptest.NewRecorder()
 	app.Router().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/partner/area", nil))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)

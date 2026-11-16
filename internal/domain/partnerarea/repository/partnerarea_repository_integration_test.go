@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"neonflow-api/internal/domain/partnerarea"
+	"neonflow-api/internal/domain/partnerarea/service"
+	"neonflow-api/internal/domain/transfer"
+	transferRepo "neonflow-api/internal/domain/transfer/repository"
+	transferService "neonflow-api/internal/domain/transfer/service"
 	"neonflow-api/internal/testutil"
 )
 
@@ -97,4 +103,105 @@ func TestPartnerAreaRepository_Integration(t *testing.T) {
 	assert.Error(t, err)
 	_, err = repo.Vehicles(ctx, pedro)
 	assert.Error(t, err)
+}
+
+// Oferta aberta (PEN-74): dois motoristas aceitam ao mesmo tempo e só um leva; quem levou pode desistir.
+func TestOpenOffer_Integration(t *testing.T) {
+	db := testutil.MigratedDB(t, "../../../../sql/migrations")
+	ctx := context.Background()
+	q := func(query string, args ...any) string {
+		var id string
+		require.NoError(t, db.QueryRowContext(ctx, query, args...).Scan(&id))
+		return id
+	}
+	repo := NewPartnerAreaRepository(db)
+	svc := service.NewPartnerAreaService(repo, transferService.NewTransferService(transferRepo.NewTransferRepository(db)))
+
+	type driver struct{ partner, user string }
+	drivers := make([]driver, 2)
+	for i, name := range []string{"Mario", "Luiz"} {
+		p := q(`INSERT INTO partners (name, is_driver, referral_code) VALUES ($1, true, $2) RETURNING id`, name, "DRV"+strings.ToUpper(name[:3])+"2")
+		u := q(`INSERT INTO users (name, email, password_hash, role, partner_id, email_verified_at) VALUES ($1, $2, 'h', 'parceiro', $3, now()) RETURNING id`, name, name+"@neonflow.test", p)
+		drivers[i] = driver{p, u}
+	}
+	car := q(`INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents, owner_partner_id) VALUES ('CCC3C33', 'Spin Mario', 'economy', 'Mario', 7, 'manual', 15000, $1) RETURNING id`, drivers[0].partner)
+	other := q(`INSERT INTO vehicles (plate, name, category, owner, seats, gear, daily_rate_cents) VALUES ('DDD4D44', 'Da central', 'economy', 'Central', 5, 'manual', 15000) RETURNING id`)
+	pickup := time.Now().Add(48 * time.Hour)
+	ride := q(`INSERT INTO transfers (client_name, pickup_at, origin, destination, passengers, price_cents, offer_cents) VALUES ('Ana', $1, 'POA', 'Gramado', 2, 50000, 30000) RETURNING id`, pickup)
+	q(`INSERT INTO transfers (client_name, pickup_at, origin, destination, passengers, price_cents) VALUES ('Sem valor', $1, 'CXJ', 'Canela', 1, 30000) RETURNING id`, pickup)
+
+	offers, err := repo.Offers(ctx)
+	require.NoError(t, err)
+	require.Len(t, offers, 1, "só a corrida com o valor da central entra na oferta")
+	assert.Equal(t, int64(30000), offers[0].OfferCents)
+	assert.Equal(t, "Ana", offers[0].ClientName)
+
+	owns, err := repo.OwnsVehicle(ctx, drivers[0].partner, car)
+	require.NoError(t, err)
+	assert.True(t, owns)
+	owns, err = repo.OwnsVehicle(ctx, drivers[0].partner, other)
+	require.NoError(t, err)
+	assert.False(t, owns)
+	owns, err = repo.OwnsVehicle(ctx, drivers[0].partner, "nao-e-uuid")
+	require.NoError(t, err)
+	assert.False(t, owns)
+	assert.ErrorIs(t, svc.Accept(ctx, drivers[0].user, ride, partnerarea.AcceptRequest{VehicleID: other}), partnerarea.ErrNotYourVehicle)
+
+	// Os dois ao mesmo tempo.
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i, d := range drivers {
+		wg.Add(1)
+		go func(d driver, vehicle string) {
+			defer wg.Done()
+			errs <- svc.Accept(ctx, d.user, ride, partnerarea.AcceptRequest{VehicleID: vehicle})
+		}(d, map[int]string{0: car, 1: ""}[i])
+	}
+	wg.Wait()
+	close(errs)
+	var ok, lost int
+	for err := range errs {
+		if err == nil {
+			ok++
+		} else {
+			assert.ErrorIs(t, err, transfer.ErrWrongStage)
+			lost++
+		}
+	}
+	assert.Equal(t, 1, ok, "só um leva")
+	assert.Equal(t, 1, lost)
+
+	var winner string
+	var driverCents int64
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT driver_partner_id, driver_cents FROM transfers WHERE id = $1`, ride).Scan(&winner, &driverCents))
+	assert.Equal(t, int64(30000), driverCents, "recebe o valor oferecido")
+	offers, err = repo.Offers(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, offers, "aceita, sai da oferta")
+
+	loser := drivers[0]
+	if winner == drivers[0].partner {
+		loser = drivers[1]
+	}
+	assert.ErrorIs(t, svc.Release(ctx, loser.user, ride), partnerarea.ErrNotYourRide, "quem não levou não desiste")
+	winnerUser := drivers[0].user
+	if winner == drivers[1].partner {
+		winnerUser = drivers[1].user
+	}
+	require.NoError(t, svc.Release(ctx, winnerUser, ride))
+	offers, err = repo.Offers(ctx)
+	require.NoError(t, err)
+	require.Len(t, offers, 1, "desistência devolve a corrida à oferta com o mesmo valor")
+	assert.Equal(t, int64(30000), offers[0].OfferCents)
+
+	var actions []string
+	rows, err := db.QueryContext(ctx, `SELECT action FROM transfer_events WHERE transfer_id = $1 ORDER BY created_at, id`, ride)
+	require.NoError(t, err)
+	for rows.Next() {
+		var a string
+		require.NoError(t, rows.Scan(&a))
+		actions = append(actions, a)
+	}
+	require.NoError(t, rows.Close())
+	assert.Equal(t, []string{"aceito", "desistiu"}, actions[len(actions)-2:], "o histórico da central mostra o aceite e a desistência")
 }
