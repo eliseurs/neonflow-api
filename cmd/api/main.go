@@ -18,6 +18,7 @@ import (
 	partnerRoute "neonflow-api/internal/domain/partner/route"
 	payoutRoute "neonflow-api/internal/domain/payout/route"
 	photoRoute "neonflow-api/internal/domain/photo/route"
+	siteRequestRoute "neonflow-api/internal/domain/siterequest/route"
 	termsRoute "neonflow-api/internal/domain/terms/route"
 	transferRoute "neonflow-api/internal/domain/transfer/route"
 	userRoute "neonflow-api/internal/domain/user/route"
@@ -78,6 +79,7 @@ func main() {
 	contractRoute.Register(app)
 	auditRoute.Register(app)
 	accountRoute.Register(app, mailer)
+	siteRequestRoute.Register(app, mailer)
 
 	app.Server()
 }

@@ -1,14 +1,14 @@
 # Decisões: o que falta, o que está decidido e o que está feito
 
-Leitura das 79 pendências de [pendencias.md](pendencias.md) por estado e severidade, conferida em 11/11/2026 (atualizada em 16/11/2026: login de parceiros e clientes, PEN-74 decidida, PEN-78 e PEN-79 novas) contra o código da API, o app, as regras (`.claude/business-rules/`) e os ADRs. O registro continua sendo a fonte do status de cada PEN; este arquivo organiza o que fazer com elas. Ao resolver uma pendência, atualize os dois.
+Leitura das 79 pendências de [pendencias.md](pendencias.md) por estado e severidade, conferida em 11/11/2026 (atualizada em 16/11/2026: login de parceiros e clientes, PEN-74 decidida, PEN-78 e PEN-79 novas; PEN-73 e PEN-77 resolvidas pelo pedido do site) contra o código da API, o app, as regras (`.claude/business-rules/`) e os ADRs. O registro continua sendo a fonte do status de cada PEN; este arquivo organiza o que fazer com elas. Ao resolver uma pendência, atualize os dois.
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
 | Estado | Bloqueante | Alta | Média | Baixa | Total |
 | --- | --- | --- | --- | --- | --- |
-| [1. Falta decidir](#1-falta-decidir) | 4 | 11 | 6 | 0 | 21 |
+| [1. Falta decidir](#1-falta-decidir) | 4 | 9 | 6 | 0 | 19 |
 | [3. Decidido ou sem decisão pendente, falta fazer](#3-falta-fazer) | 3 | 9 | 5 | 1 | 18 |
-| [4. Decidido e feito](#4-decidido-e-feito) | 9 | 19 | 9 | 3 | 40 |
+| [4. Decidido e feito](#4-decidido-e-feito) | 9 | 21 | 9 | 3 | 42 |
 
 A seção [2](#2-revisões-de-classificação-propostas) lista mudanças de severidade e reaberturas propostas na conferência, **ainda não aplicadas** ao registro.
 
@@ -29,8 +29,6 @@ Alguém precisa responder ou informar algo antes de haver o que implementar.
 
 | PEN | O que falta decidir ou informar | Quem | O que isso trava |
 | --- | --- | --- | --- |
-| PEN-73 | Pedido vindo do site bloqueia as datas ao chegar ou só quando a central confirma? | Fundador | Pacotes 2 e 3 (pedido do site na central) |
-| PEN-77 | Por onde o cliente recebe o retorno: página por link, WhatsApp da central ou e-mail | Fundador + produto | Pacote 2 |
 | PEN-72 | Para onde vai o aluguel com motorista na entrada do site: some, vira "passeio" ou fica dentro do aluguel | Fundador | Pacote 1; contrato 06 (passeio) |
 | PEN-75 | "Assinar digitalmente" é o aceite com caixa e hash que já existe ou assinatura com provedor? | Fundador + jurídico | Pacote 5 |
 | PEN-76 | A comissão do Neon Flow varia por serviço? O percentual do indicador incide sobre o valor do serviço ou sobre a comissão da plataforma? | Fundador | Pacote 6 |
@@ -112,7 +110,7 @@ Sem PEN própria, decidido e ainda não implementado:
 | O que falta fazer | Regra ou decisão | Depende de |
 | --- | --- | --- |
 | Formulário do site por serviço (retirada e devolução com hora; origem, destino, horário e passageiros) | Pacote 1 | Em parte, PEN-72 |
-| Pedido do site chegando à central, com confirmar, recusar e pedir ajuste | Pacote 2 | PEN-73, PEN-77 |
+| Telas do pedido do site: pedir logado, acompanhar em Minha conta, lista da central com confirmar, recusar, pedir ajuste e avisar no WhatsApp (API pronta, RN-02.33 a 02.37) | Pacote 2 | — |
 | Extensão do aluguel pela central, com cobrança da diferença | RN-02.20 | — |
 | Pagamento online pela Stripe e pré-autorização da caução | ADR-0013, RN-06.4 | Depois do lançamento |
 | CNH e documentos do cliente, condutor adicional, bloqueio por idade | RN-04.4, RN-06.7, RN-06.8 | PEN-48 |
@@ -159,6 +157,8 @@ Sem PEN própria: mostrar o dólar como conversão no site (ADR-0013, PEN-63), q
 
 | PEN | O que foi decidido | Feito |
 | --- | --- | --- |
+| PEN-73 | Pedido do site não bloqueia; bloqueia quando a central confirma e a reserva nasce (RN-02.33, 16/11/2026) | Sim na API; telas no app a fazer |
+| PEN-77 | Retorno por e-mail, Minha conta e botão de WhatsApp na central (RN-02.36, 16/11/2026) | E-mail e histórico na API; telas e botão no app a fazer |
 | PEN-07 | Transfer: 60 min inclusos, espera extra cobrada, primeiro que aceita leva, oferta que só aumenta, desistência sem penalidade | Sim; aceite pelo motorista segue na PEN-74 |
 | PEN-08 | Comissão por parceiro, sobre as diárias, saindo da parte do Neon Flow, gerada no encerramento | Sim; base e variação por serviço seguem na PEN-76 |
 | PEN-09 | Neon Flow recebe, fica com percentual configurável e repassa ao dono; motorista recebe o valor da oferta | Sim; caso do carro de terceiro segue na PEN-67 |
