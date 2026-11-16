@@ -1,13 +1,13 @@
 # Decisões: o que falta, o que está decidido e o que está feito
 
-Leitura das 77 pendências de [pendencias.md](pendencias.md) por estado e severidade, conferida em 11/11/2026 contra o código da API, o app, as regras (`.claude/business-rules/`) e os ADRs. O registro continua sendo a fonte do status de cada PEN; este arquivo organiza o que fazer com elas. Ao resolver uma pendência, atualize os dois.
+Leitura das 79 pendências de [pendencias.md](pendencias.md) por estado e severidade, conferida em 11/11/2026 (atualizada em 16/11/2026: login de parceiros e clientes, PEN-74 decidida, PEN-78 e PEN-79 novas) contra o código da API, o app, as regras (`.claude/business-rules/`) e os ADRs. O registro continua sendo a fonte do status de cada PEN; este arquivo organiza o que fazer com elas. Ao resolver uma pendência, atualize os dois.
 
 Severidade: **Bloqueante** impede operar com cliente real · **Alta** necessária para o primeiro ciclo persistente · **Média** precisa de decisão antes do MVP · **Baixa** higiene.
 
 | Estado | Bloqueante | Alta | Média | Baixa | Total |
 | --- | --- | --- | --- | --- | --- |
-| [1. Falta decidir](#1-falta-decidir) | 4 | 12 | 6 | 0 | 22 |
-| [3. Decidido ou sem decisão pendente, falta fazer](#3-falta-fazer) | 3 | 7 | 4 | 1 | 15 |
+| [1. Falta decidir](#1-falta-decidir) | 4 | 11 | 6 | 0 | 21 |
+| [3. Decidido ou sem decisão pendente, falta fazer](#3-falta-fazer) | 3 | 9 | 5 | 1 | 18 |
 | [4. Decidido e feito](#4-decidido-e-feito) | 9 | 19 | 9 | 3 | 40 |
 
 A seção [2](#2-revisões-de-classificação-propostas) lista mudanças de severidade e reaberturas propostas na conferência, **ainda não aplicadas** ao registro.
@@ -32,13 +32,12 @@ Alguém precisa responder ou informar algo antes de haver o que implementar.
 | PEN-73 | Pedido vindo do site bloqueia as datas ao chegar ou só quando a central confirma? | Fundador | Pacotes 2 e 3 (pedido do site na central) |
 | PEN-77 | Por onde o cliente recebe o retorno: página por link, WhatsApp da central ou e-mail | Fundador + produto | Pacote 2 |
 | PEN-72 | Para onde vai o aluguel com motorista na entrada do site: some, vira "passeio" ou fica dentro do aluguel | Fundador | Pacote 1; contrato 06 (passeio) |
-| PEN-74 | O motorista volta a aceitar ou recusar a corrida por conta própria? Por onde ele responde? | Fundador / operação | Pacote 4 |
 | PEN-75 | "Assinar digitalmente" é o aceite com caixa e hash que já existe ou assinatura com provedor? | Fundador + jurídico | Pacote 5 |
 | PEN-76 | A comissão do Neon Flow varia por serviço? O percentual do indicador incide sobre o valor do serviço ou sobre a comissão da plataforma? | Fundador | Pacote 6 |
 | PEN-70 | Modelo contratual do lançamento: Neon Flow intermediador (parceiro é o locador) ou central operando a frota | Fundador + jurídico | Ordem 04 preenchida com os dados da reserva; situação do cadastro do veículo |
 | PEN-67 | Transfer com carro de parceiro dirigido por outra pessoa: o dono recebe? Quanto e sobre qual base? | Fundador | Repasse do transfer (hoje só o motorista recebe) |
 | PEN-65 | Acordos com hotéis e autorização de uso de nome e foto | Fundador | Comissão de hotel com acordo válido (RN-03.2); divulgação com parceiros |
-| PEN-14 | Matriz de permissões de parceiro, motorista, indicador e cliente | Produto | Área do parceiro (PEN-16, PEN-17), acesso do motorista (PEN-74), portal do cliente (PEN-15) |
+| PEN-14 | O que proprietário, motorista, indicador e cliente veem e fazem na própria área. O login de todos existe desde 16/11/2026 (RN-05.11 a RN-05.14) | Produto | Área do parceiro (PEN-16, PEN-17), aceite pelo motorista (PEN-74), área do cliente (PEN-15) |
 | PEN-11 | Metas dos indicadores | Fundador | Medir antes de expandir (`produto/metricas.md` com metas em branco) |
 | PEN-37 | Namespace técnico `neoflow` × `neonflow` ([ADR-0005](adr/ADR-0005-namespace-tecnico.md), não decidido) | Fundador + arquitetura | Integração com o Nexus; nenhum código cria namespace até lá |
 
@@ -75,7 +74,7 @@ Resultado da conferência de 11/11/2026. **Nada daqui foi aplicado**: mudar seve
 | PEN-03 | Bloqueante, parcial | Alta | Quase tudo decidido; o site já manda o estrangeiro consultar a central |
 | PEN-35 | Bloqueante, aberta | Média | O ADR-0004 diz que "bloqueia a implementação", mas ela foi autorizada e feita com autenticação própria (ADR-0009, PEN-52); os critérios do dia 1 (PEN-13) não citam o Nexus. Bloqueia só a integração |
 | PEN-36 | Bloqueante, aberta | Média | Mesmo caso da PEN-35 |
-| PEN-49 | Bloqueante, aberta | Alta, ligada à PEN-14 | Um só operador e nenhum tenant no código; os três papéis já são isolados por rota. Passa a bloquear quando parceiro, motorista ou cliente tiver login |
+| PEN-49 | Bloqueante, aberta | Alta, ligada à PEN-14 | Um só operador e nenhum tenant no código; os três papéis já são isolados por rota. Passa a bloquear quando parceiro, motorista ou cliente tiver login. Desde 16/11/2026 eles entram, ainda sem rota de dados: cada área nova tem de filtrar pelo cadastro da conta |
 | PEN-42 | Alta, aberta | Baixa | Localizar um PDF histórico deixou de ser necessário para o ciclo persistente |
 | PEN-59 | Alta, resolvida ("preço visível") | Reabrir | O site não mostra preço por decisão posterior (RN-01.9), e a API pública não devolve a diária. Duas decisões em conflito |
 | PEN-50 | Alta, resolvida ("já consultei, e não precisa") | Voltar a parcial | Depois vieram os contratos para revisão de advogada, o modelo intermediador (PEN-70) e a habilitação estrangeira ainda por confirmar |
@@ -99,12 +98,14 @@ Já decidido, ou não depende de decisão: é trabalho de engenharia, produto ou
 | PEN | O que falta fazer | Depende de |
 | --- | --- | --- |
 | PEN-30 | Financeiro: cancelamento do aluguel cobrando 1 diária depois das 48h (RN-02.21), registrar a obrigação de estorno da reserva paga e cancelada (RN-03.3, RN-03.11) e contabilizar a caução à parte (RN-03.1) | Nada; RN-03.1 e RN-03.3 ainda estão como "proposta" |
-| PEN-15 | Portal do cliente com login (RN-04.6) e documentos no cadastro | PEN-48, PEN-14 |
+| PEN-15 | Área do cliente (o login existe desde 16/11/2026, RN-05.13) e documentos no cadastro | PEN-48, PEN-14 |
 | PEN-16 | Área do parceiro e documentos dos parceiros | PEN-14, PEN-48 |
 | PEN-17 | Mostrar ao indicador o resultado das indicações | PEN-14 |
-| PEN-68 | Convite individual e MFA da revisora jurídica; retirar a exceção que deixa o admin aprovar (RN-08.4) | Provedor de e-mail; conta da advogada |
+| PEN-68 | Convite individual e MFA da revisora jurídica; retirar a exceção que deixa o admin aprovar (RN-08.4) | Conta da advogada (o envio de e-mail existe desde 16/11/2026, ADR-0016) |
 | PEN-38 | Especificar os contratos de integração com Shell e Nexus | PEN-35 |
 | PEN-42 | Localizar `NEON_FLOW_cartao_executivo.pdf` | Fundador |
+| PEN-74 | Oferta aberta do transfer: a corrida aparece para todos os motoristas ativos na área do parceiro e o primeiro que aceitar leva (decidido em 16/11/2026, revê a RN-02.30) | PEN-14 (o que o motorista vê) |
+| PEN-78 | Verificar no Resend um domínio do Neon Flow para o remetente; sem ele nenhum e-mail chega a clientes e parceiros | Fundador (domínio e DNS) |
 
 Sem PEN própria, decidido e ainda não implementado:
 
@@ -123,6 +124,7 @@ Sem PEN própria, decidido e ainda não implementado:
 | PEN | O que falta fazer | Depende de |
 | --- | --- | --- |
 | PEN-69 | Relatório de revisão em PDF e diferença entre versões dos contratos | — |
+| PEN-79 | Limitar chamadas nas rotas públicas de cadastro e de nova senha | — |
 | PEN-51 | QA visual, de teclado e de acessibilidade | — |
 | PEN-12 | Validar mercado: concorrência, preço e demanda | Produto |
 | PEN-45 | Ler os documentos citados e nunca abertos (arquitetura do Nexus, recuperação do projeto, snapshot do Replit) | Acesso aos arquivos |

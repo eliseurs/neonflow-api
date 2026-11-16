@@ -46,9 +46,11 @@ internal/
     terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
     contract/               # os seis contratos em versões com hash e a revisão jurídica append-only (RN-08, ADR-0015)
     audit/                  # consulta da trilha de auditoria das rotas (RN-05.9)
+    account/                # contas de parceiro (convite) e cliente (cadastro no site), confirmação do e-mail e nova senha (RN-05.11 a 05.14)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown; store (papel atual e gravação da auditoria)
     db/                     # Open (pool + ping)
+    email/                  # envio pelo Resend; desligado sem RESEND_API_KEY e EMAIL_FROM (ADR-0016)
     migrator/               # runner V{N}_*.sql (transação por migration)
   config/                   # settings (env + defaults locais)
   pkg/
@@ -73,7 +75,12 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 |---|---|---|---|
 | GET | `/health`, `/api/health` | — | 200 com banco ok, 503 sem banco |
 | POST | `/api/auth/login` | — | `{email, password}` → `{token, expires_at, user}`; `user.permissions` como no `/auth/me` |
-| GET | `/api/auth/me` | JWT | Usuário do token, com `permissions` (o que o papel pode abrir) |
+| GET | `/api/auth/me` | JWT | Usuário do token, com `permissions` (o que o papel pode abrir) e, na conta de parceiro ou cliente, `partner_id` ou `customer_id`. Cliente com e-mail sem confirmar recebe 403 no login |
+| POST | `/api/partners/:id/invite` | operacao | Convida o parceiro: manda o link de criar senha para o e-mail dele (7 dias). Devolve `sent_to` e `expires_at`. 409 desativado, sem e-mail válido, já com conta ou e-mail usado por outra conta; 503 sem envio configurado |
+| POST | `/api/public/accounts/signup` | sem login | Cadastro do cliente (`name`, `email`, `password` com 10+): 202 e link de confirmação por e-mail (24 h). Mesma resposta se o e-mail já tem conta |
+| POST | `/api/public/accounts/confirm` | sem login | `{token}`: confirma o e-mail e liga a conta ao cadastro do cliente com o mesmo e-mail (ou cria um) |
+| POST | `/api/public/accounts/forgot-password` | sem login | `{email}`: 202 e link de nova senha (1 h) para conta ativa e confirmada; mesma resposta sem conta |
+| POST | `/api/public/accounts/reset-password`, `/api/public/accounts/accept-invite` | sem login | `{token, password}`: nova senha, ou criação da conta do parceiro convidado. 400 link inválido, vencido ou já usado |
 | GET | `/api/vehicles` | operacao | Lista a frota, com `status` (`manutencao`, `em_locacao`, `aguardando_checklist`, `reservado`, `livre`) e `next_booking` (RN-01.3) |
 | GET | `/api/vehicles/:id` | operacao | Um veículo, com `status` e `next_booking` |
 | POST | `/api/vehicles` | operacao | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance` e, opcionais, `deposit_cents`, `km_limit_per_day` com `extra_km_cents`) |
@@ -137,7 +144,7 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/audit?user_id=&denied=true&limit=` | auditoria | Trilha de auditoria, mais recente primeiro (padrão 100, máximo 500); `denied=true` só os acessos negados |
 | GET | `/api/dashboard?month=AAAA-MM` | operacao | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
 
-Permissões (RN-05.10, `internal/pkg/authz`): `operacao` (admin, central), `clientes.anonimizar`, `termos.publicar`, `usuarios` e `auditoria` (admin), `contratos` (admin, legal_reviewer). Sem a permissão: 403 "acesso negado para este perfil". O papel vale pelo banco a cada requisição: usuário desativado recebe 401 na hora (RN-05.8).
+Permissões (RN-05.10, `internal/pkg/authz`): `operacao` (admin, central), `clientes.anonimizar`, `termos.publicar`, `usuarios` e `auditoria` (admin), `contratos` (admin, legal_reviewer), `area.parceiro` (parceiro) e `area.cliente` (cliente). Sem a permissão: 403 "acesso negado para este perfil". O papel vale pelo banco a cada requisição: usuário desativado recebe 401 na hora (RN-05.8).
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
@@ -151,14 +158,21 @@ Em "devolvida", as conferências exigidas são `issues` mais as chaves dos itens
 users
   id UUID PK DEFAULT gen_random_uuid()
   name, email, password_hash TEXT NOT NULL
-  role TEXT CHECK (role IN ('admin','central','legal_reviewer'))   -- V20: revisora jurídica
+  role TEXT CHECK (role IN ('admin','central','legal_reviewer','parceiro','cliente'))   -- V20: revisora; V23: parceiro e cliente
   active BOOL DEFAULT true              -- V8: desativado não entra
+  partner_id FK partners NULL, customer_id FK customers NULL   -- V23: uma conta por cadastro; parceiro exige partner_id, equipe não tem nenhum
+  email_verified_at TIMESTAMPTZ NULL    -- V23: cliente só entra com o e-mail confirmado
   created_at, updated_at TIMESTAMPTZ
   UNIQUE INDEX lower(email)
 
 audit_log                               -- V22, só inclusão (trigger), RN-05.9
   id UUID PK, user_id FK users, role, method, route, path TEXT, status INT, created_at TIMESTAMPTZ
   -- escritas (inclusive o login) e acessos negados; sem corpo nem query string
+
+account_tokens                          -- V23, links de uso único enviados por e-mail (RN-05.14)
+  id, purpose CHECK (verificar_email|convite|nova_senha), token_hash UNIQUE (só o hash)
+  user_id FK users NULL, partner_id FK partners NULL   -- convite aponta para o parceiro; os outros, para a conta
+  expires_at, used_at, created_at
 
 schema_migrations (version TEXT PK, applied_at)
 ```

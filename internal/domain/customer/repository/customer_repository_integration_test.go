@@ -90,7 +90,10 @@ func TestCustomerRepository_Integration(t *testing.T) {
 	_, err = repo.Update(ctx, bob.ID, customer.Request{Name: "Bob", WhatsApp: "5554999990001", Language: "en"})
 	assert.ErrorIs(t, err, customer.ErrWhatsAppTaken)
 
-	// Anonimizar apaga nome e contatos, também nos pedidos; valores ficam.
+	// Anonimizar apaga nome e contatos, também nos pedidos e na conta do site; valores ficam.
+	var accountID string
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO users (name, email, password_hash, role, customer_id) VALUES ('Ana', 'ana.conta@neonflow.test', 'h', 'cliente', $1) RETURNING id`, ana.ID).Scan(&accountID))
 	anon, err := repo.Anonymize(ctx, ana.ID)
 	require.NoError(t, err)
 	assert.Equal(t, customer.AnonymizedName, anon.Name)
@@ -105,6 +108,12 @@ func TestCustomerRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, customer.AnonymizedName, tAfter.ClientName)
 	assert.Empty(t, tAfter.Notes)
+	var accountName, accountEmail string
+	var accountActive bool
+	require.NoError(t, database.QueryRowContext(ctx, `SELECT name, email, active FROM users WHERE id = $1`, accountID).Scan(&accountName, &accountEmail, &accountActive))
+	assert.Equal(t, customer.AnonymizedName, accountName)
+	assert.Equal(t, "anonimizado-"+accountID+"@neonflow.invalid", accountEmail)
+	assert.False(t, accountActive, "a conta do cliente anonimizado não entra mais")
 	_, err = repo.Update(ctx, ana.ID, customer.Request{Name: "Volta", Language: "pt"})
 	assert.ErrorIs(t, err, customer.ErrAnonymized)
 	_, err = repo.Anonymize(ctx, ana.ID)

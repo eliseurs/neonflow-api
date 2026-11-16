@@ -48,6 +48,20 @@ func TestStore_Integration(t *testing.T) {
 	_, err = s.ActiveRole(ctx, id)
 	assert.ErrorIs(t, err, middleware.ErrAccountNotFound, "desativado perde o acesso na hora (RN-05.8)")
 
+	// Conta de parceiro: vale enquanto o parceiro estiver ativo (RN-05.12).
+	var partnerID, partnerUser string
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO partners (name, is_driver, referral_code) VALUES ('Motorista Teste', true, 'ABC234') RETURNING id`).Scan(&partnerID))
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO users (name, email, password_hash, role, partner_id) VALUES ('Motorista Teste', 'motorista@neonflow.test', 'h', 'parceiro', $1) RETURNING id`, partnerID).Scan(&partnerUser))
+	role, err = s.ActiveRole(ctx, partnerUser)
+	require.NoError(t, err)
+	assert.Equal(t, "parceiro", role)
+	_, err = database.ExecContext(ctx, `UPDATE partners SET active = false WHERE id = $1`, partnerID)
+	require.NoError(t, err)
+	_, err = s.ActiveRole(ctx, partnerUser)
+	assert.ErrorIs(t, err, middleware.ErrAccountNotFound, "parceiro desativado perde o acesso na hora")
+
 	entry.UserID = "00000000-0000-0000-0000-000000000000"
 	assert.Error(t, s.Record(ctx, entry), "usuário inexistente")
 

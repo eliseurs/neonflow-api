@@ -44,6 +44,9 @@ func (s *AuthService) Login(ctx context.Context, req authentication.LoginRequest
 	if !s.hasher.Compare(creds.PasswordHash, req.Password) {
 		return authentication.LoginResponse{}, authentication.ErrInvalidCredentials
 	}
+	if !creds.EmailVerified {
+		return authentication.LoginResponse{}, authentication.ErrEmailNotVerified
+	}
 
 	token, expiresAt, err := s.tokens.Generate(creds.ID, creds.Role)
 	if err != nil {

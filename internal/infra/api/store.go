@@ -14,8 +14,12 @@ import (
 const (
 	invalidTextRepresentation = "22P02"
 
-	queryActiveRole = `SELECT role FROM users WHERE id = $1 AND active`
-	queryAudit      = `INSERT INTO audit_log (user_id, role, method, route, path, status) VALUES ($1, $2, $3, $4, $5, $6)`
+	// Parceiro desativado perde a sessão como o usuário desativado (RN-05.8, RN-05.12).
+	queryActiveRole = `
+		SELECT u.role FROM users u
+		LEFT JOIN partners p ON p.id = u.partner_id
+		WHERE u.id = $1 AND u.active AND (u.partner_id IS NULL OR p.active)`
+	queryAudit = `INSERT INTO audit_log (user_id, role, method, route, path, status) VALUES ($1, $2, $3, $4, $5, $6)`
 )
 
 // store é o que os middlewares precisam do banco: o papel atual do usuário (RN-05.8) e a gravação da auditoria (RN-05.9).

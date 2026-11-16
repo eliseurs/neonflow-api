@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"neonflow-api/internal/config"
+	accountRoute "neonflow-api/internal/domain/account/route"
 	auditRoute "neonflow-api/internal/domain/audit/route"
 	authRoute "neonflow-api/internal/domain/authentication/route"
 	bookingRoute "neonflow-api/internal/domain/booking/route"
@@ -22,6 +23,7 @@ import (
 	userRoute "neonflow-api/internal/domain/user/route"
 	"neonflow-api/internal/infra/api"
 	"neonflow-api/internal/infra/db"
+	"neonflow-api/internal/infra/email"
 	"neonflow-api/internal/infra/storage"
 	"neonflow-api/internal/pkg/logger"
 )
@@ -51,6 +53,11 @@ func main() {
 		log.Info("storage not configured: photo uploads disabled")
 	}
 
+	mailer := email.New(cfg.Email)
+	if !mailer.Enabled() {
+		log.Info("email not configured: signup, partner invite and password reset disabled")
+	}
+
 	app := api.New(cfg, database, log)
 	app.Setup()
 	app.HealthCheck()
@@ -70,6 +77,7 @@ func main() {
 	maintenanceRoute.Register(app)
 	contractRoute.Register(app)
 	auditRoute.Register(app)
+	accountRoute.Register(app, mailer)
 
 	app.Server()
 }

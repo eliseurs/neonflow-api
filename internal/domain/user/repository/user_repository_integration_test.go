@@ -37,6 +37,15 @@ func TestUserRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, kept.Active, "sem active, mantém")
 
+	// A conta de cliente não aparece nem é editada em Usuários (RN-05.11).
+	var cliente string
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO users (name, email, password_hash, role) VALUES ('Cliente', 'cliente@neonflow.test', 'h', 'cliente') RETURNING id`).Scan(&cliente))
+	_, err = repo.FindByID(ctx, cliente)
+	assert.ErrorIs(t, err, authentication.ErrUserNotFound)
+	_, err = repo.Update(ctx, cliente, user.UpdateRequest{Name: "Virou admin", Role: "admin"})
+	assert.ErrorIs(t, err, authentication.ErrUserNotFound)
+
 	list, err := repo.List(ctx)
 	require.NoError(t, err)
 	require.Len(t, list, 2)

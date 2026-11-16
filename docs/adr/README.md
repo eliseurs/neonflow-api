@@ -19,3 +19,4 @@ Formato [MADR](https://adr.github.io/madr/). ADR aceito é imutável: mudanças 
 | [ADR-0013](ADR-0013-pagamento-online-e-moedas.md) | Pagamento integral online e preço em duas moedas | aceita | 04/11/2026 |
 | [ADR-0014](ADR-0014-armazenamento-de-fotos.md) | Onde guardar as fotos dos veículos | proposta | 06/11/2026 |
 | [ADR-0015](ADR-0015-contratos-versionados-e-revisao-juridica.md) | Contratos em versões imutáveis com hash e revisão jurídica append-only | aceita | 08/11/2026 |
+| [ADR-0016](ADR-0016-envio-de-email-pelo-resend.md) | E-mails da API pelo Resend | aceita | 16/11/2026 |

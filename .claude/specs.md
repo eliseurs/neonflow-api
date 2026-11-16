@@ -8,6 +8,22 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-16] — Login de parceiros e clientes (RN-05.11 a 05.14)
+
+Decisão do fundador no CLI: parceiros de qualquer tipo e clientes entram na aplicação (RN-05.6 revista); o cliente se cadastra sozinho, com o e-mail confirmado pelo Resend; a senha esquecida volta por e-mail; no transfer, oferta aberta (PEN-74, ainda não implementada). Este PR é a base de login; as áreas do parceiro e do cliente vêm nos próximos.
+
+- `V23_contas_parceiros_e_clientes`: papéis `parceiro` e `cliente`; `users.partner_id` e `users.customer_id` (uma conta por cadastro, CHECK por papel); `users.email_verified_at` (equipe e contas antigas já confirmadas); `account_tokens` com links de uso único, só o hash. Down testado.
+- `authz`: permissões `area.parceiro` e `area.cliente`; `StaffRole` no lugar de `ValidRole`, para o admin e a CLI criarem só contas da equipe. Em Usuários, lista e edição só da equipe.
+- Login: cliente com e-mail sem confirmar recebe 403 depois da senha certa; `/auth/me` traz `partner_id` ou `customer_id`. Parceiro desativado não entra e perde a sessão na hora (`store.ActiveRole`).
+- Domínio `account`: cadastro do cliente, confirmação (liga ao cadastro da central com o mesmo e-mail, ou cria um), convite do parceiro pela central, aceite do convite, "esqueci a senha" e nova senha. Respostas iguais com ou sem conta para o e-mail. Validade: 24 h, 7 dias e 1 h.
+- `internal/infra/email`: Resend (`resend-go/v3` v3.17.0, aprovada pelo responsável; Go 1.25 mantido). Variáveis `RESEND_API_KEY`, `EMAIL_FROM` e `APP_URL`; sem elas, as rotas de e-mail respondem 503. O log da falha não leva o destinatário.
+- Anonimizar o cliente apaga nome e e-mail da conta dele e a desativa.
+- Testes: authz, config, envio (servidor local no lugar do Resend), entidade, serviço, handler, rota e integração (fluxos completos, link vencido, uso único, cadastro com dois clientes de mesmo e-mail, parceiro desativado, anonimização). Smoke com a API rodando e um Resend falso: convite, aceite, login do parceiro com 403 na operação, cadastro, login antes e depois de confirmar, nova senha, anonimização. Cobertura de `internal/` com integração: 95,5%.
+- Docs: RN-05.2, 05.3 e 05.6 revistas, RN-05.11 a 05.14, RN-04.6, RN-04.8 e RN-02.30; ADR-0016; PEN-14, 15, 74 e 77 atualizadas; PEN-78 (domínio verificado no Resend) e PEN-79 (limite nas rotas públicas) novas; `decisoes.md`, `design.md`, `deploy-railway.md`.
+- Falta no app: telas de cadastro, confirmação, convite e nova senha (`/conta/...`), botão "Convidar" no parceiro e o artigo da Central de Ajuda.
+
+---
+
 ## [2026-11-16] — Permissões, papel do banco e auditoria das rotas (RN-05.8 a 05.10)
 
 - **Matriz de acesso** em `internal/pkg/authz`: papel → permissões (`operacao`, `contratos`, `clientes.anonimizar`, `termos.publicar`, `usuarios`, `auditoria`). `api.Routes` troca `Roles` por `Permission`, e `middleware.Require(permissão)` substitui o `RoleGuard`. Cada papel continua com o mesmo acesso de antes.

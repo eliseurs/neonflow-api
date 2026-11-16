@@ -33,6 +33,41 @@ func TestAuthRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, creds.ID)
 	assert.Equal(t, "hash", creds.PasswordHash)
+	assert.True(t, creds.EmailVerified, "a equipe nasce com o e-mail confirmado")
+	assert.Nil(t, creds.PartnerID)
+
+	// Conta de parceiro: traz o cadastro e some quando o parceiro é desativado (RN-05.12).
+	var partnerID string
+	require.NoError(t, database.QueryRowContext(ctx,
+		`INSERT INTO partners (name, is_owner, referral_code) VALUES ('Dono Teste', true, 'DONO23') RETURNING id`).Scan(&partnerID))
+	_, err = database.ExecContext(ctx,
+		`INSERT INTO users (name, email, password_hash, role, partner_id, email_verified_at) VALUES ('Dono Teste', 'dono@neonflow.test', 'h', 'parceiro', $1, now())`, partnerID)
+	require.NoError(t, err)
+	dono, err := repo.FindByEmail(ctx, "dono@neonflow.test")
+	require.NoError(t, err)
+	require.NotNil(t, dono.PartnerID)
+	assert.Equal(t, partnerID, *dono.PartnerID)
+	me, err := repo.FindByID(ctx, dono.ID)
+	require.NoError(t, err)
+	assert.Equal(t, partnerID, *me.PartnerID)
+	_, err = database.ExecContext(ctx, `UPDATE partners SET active = false WHERE id = $1`, partnerID)
+	require.NoError(t, err)
+	_, err = repo.FindByEmail(ctx, "dono@neonflow.test")
+	assert.ErrorIs(t, err, authentication.ErrUserNotFound, "parceiro desativado não entra")
+
+	// O banco recusa conta de parceiro sem parceiro e conta da equipe ligada a um cadastro.
+	_, err = database.ExecContext(ctx, `INSERT INTO users (name, email, password_hash, role) VALUES ('X', 'p@neonflow.test', 'h', 'parceiro')`)
+	assert.Error(t, err)
+	_, err = database.ExecContext(ctx, `INSERT INTO users (name, email, password_hash, role, partner_id) VALUES ('X', 'c@neonflow.test', 'h', 'central', $1)`, partnerID)
+	assert.Error(t, err)
+
+	// Cliente sem o e-mail confirmado: o repository devolve, o serviço recusa o login.
+	_, err = database.ExecContext(ctx, `INSERT INTO users (name, email, password_hash, role) VALUES ('Ana', 'ana@neonflow.test', 'h', 'cliente')`)
+	require.NoError(t, err)
+	ana, err := repo.FindByEmail(ctx, "ana@neonflow.test")
+	require.NoError(t, err)
+	assert.False(t, ana.EmailVerified)
+	assert.Nil(t, ana.CustomerID)
 
 	_, err = repo.FindByEmail(ctx, "ninguem@neonflow.test")
 	assert.ErrorIs(t, err, authentication.ErrUserNotFound)

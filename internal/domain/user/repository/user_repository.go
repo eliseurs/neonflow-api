@@ -17,18 +17,20 @@ const (
 	invalidTextRepresentation = "22P02"
 
 	userColumns = `id, name, email, role, active, created_at, updated_at`
+	// Só a equipe aparece e é editada aqui; contas de parceiro e cliente têm o próprio fluxo (RN-05.11).
+	staffOnly = `role IN ('admin', 'central', 'legal_reviewer')`
 
-	queryList     = `SELECT ` + userColumns + ` FROM users ORDER BY active DESC, name, email`
-	queryFindByID = `SELECT ` + userColumns + ` FROM users WHERE id = $1`
+	queryList     = `SELECT ` + userColumns + ` FROM users WHERE ` + staffOnly + ` ORDER BY active DESC, name, email`
+	queryFindByID = `SELECT ` + userColumns + ` FROM users WHERE id = $1 AND ` + staffOnly
 	queryCreate   = `
-		INSERT INTO users (name, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (name, email, password_hash, role, email_verified_at)
+		VALUES ($1, $2, $3, $4, now())
 		RETURNING ` + userColumns
 	// "active" ausente mantém o valor atual.
 	queryUpdate = `
 		UPDATE users
 		SET name = $2, role = $3, active = coalesce($4, active), updated_at = now()
-		WHERE id = $1
+		WHERE id = $1 AND ` + staffOnly + `
 		RETURNING ` + userColumns
 	queryPasswordHash = `SELECT password_hash FROM users WHERE id = $1`
 	querySetPassword  = `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`

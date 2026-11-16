@@ -23,15 +23,19 @@ type User struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
 	// Permissions é o que o papel pode abrir (RN-05.10); o app monta o menu e as telas por esta lista.
-	Permissions []string  `json:"permissions"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Permissions []string `json:"permissions"`
+	// PartnerID e CustomerID ligam a conta ao cadastro do parceiro ou do cliente (RN-05.11).
+	PartnerID  *string   `json:"partner_id,omitempty"`
+	CustomerID *string   `json:"customer_id,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Credentials é o usuário com o hash da senha. Nunca sai da API.
 type Credentials struct {
 	User
-	PasswordHash string
+	PasswordHash  string
+	EmailVerified bool
 }
 
 type LoginRequest struct {
@@ -64,8 +68,9 @@ func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }
 
+// ValidRole diz se o papel pode ser criado pela CLI ou pelo admin: só os da equipe (RN-05.11).
 func ValidRole(role string) bool {
-	return authz.ValidRole(role)
+	return authz.StaffRole(role)
 }
 
 // Validate normaliza e valida o pedido de criação de usuário.

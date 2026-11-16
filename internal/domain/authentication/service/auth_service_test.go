@@ -73,8 +73,9 @@ func newSvc(repo *fakeRepo, h *fakeHasher, tok fakeTokens) *AuthService {
 }
 
 var central = authentication.Credentials{
-	User:         authentication.User{ID: "u1", Name: "Central", Email: "central@neonflow.test", Role: "central"},
-	PasswordHash: "h:senha-forte-123",
+	User:          authentication.User{ID: "u1", Name: "Central", Email: "central@neonflow.test", Role: "central"},
+	PasswordHash:  "h:senha-forte-123",
+	EmailVerified: true,
 }
 
 func TestLogin_Success(t *testing.T) {
@@ -84,6 +85,27 @@ func TestLogin_Success(t *testing.T) {
 	assert.Equal(t, "tok-u1-central", res.Token)
 	assert.Equal(t, "u1", res.User.ID)
 	assert.Equal(t, []string{"operacao"}, res.User.Permissions, "o login já devolve o que o papel pode abrir (RN-05.10)")
+}
+
+func TestLogin_CustomerAccount(t *testing.T) {
+	customerID := "c1"
+	cliente := authentication.Credentials{
+		User:         authentication.User{ID: "u2", Name: "Ana", Email: "ana@neonflow.test", Role: "cliente", CustomerID: &customerID},
+		PasswordHash: "h:senha-forte-123",
+	}
+	repo := &fakeRepo{byEmail: map[string]authentication.Credentials{cliente.Email: cliente}}
+
+	_, err := newSvc(repo, &fakeHasher{}, fakeTokens{}).Login(context.Background(), authentication.LoginRequest{Email: cliente.Email, Password: "errada"})
+	assert.ErrorIs(t, err, authentication.ErrInvalidCredentials, "senha errada não revela que falta confirmar o e-mail")
+	_, err = newSvc(repo, &fakeHasher{}, fakeTokens{}).Login(context.Background(), authentication.LoginRequest{Email: cliente.Email, Password: "senha-forte-123"})
+	assert.ErrorIs(t, err, authentication.ErrEmailNotVerified, "cliente só entra com o e-mail confirmado (RN-05.13)")
+
+	cliente.EmailVerified = true
+	repo.byEmail[cliente.Email] = cliente
+	res, err := newSvc(repo, &fakeHasher{}, fakeTokens{}).Login(context.Background(), authentication.LoginRequest{Email: cliente.Email, Password: "senha-forte-123"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"area.cliente"}, res.User.Permissions)
+	assert.Equal(t, &customerID, res.User.CustomerID)
 }
 
 func TestLogin_SameErrorForUnknownEmailAndWrongPassword(t *testing.T) {
