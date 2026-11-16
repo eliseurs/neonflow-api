@@ -46,6 +46,7 @@ internal/
     terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
     contract/               # os seis contratos em versões com hash e a revisão jurídica append-only (RN-08, ADR-0015)
     audit/                  # consulta da trilha de auditoria das rotas (RN-05.9)
+    partnerarea/            # área do parceiro logado, só leitura: carros, reservas sem o cliente, corridas e indicações (RN-07.8 a 07.11)
     siterequest/            # pedidos do site (aluguel e transfer) do cliente logado; a central confirma, recusa ou pede ajuste (RN-02.33 a 02.37)
     account/                # contas de parceiro (convite) e cliente (cadastro no site), confirmação do e-mail e nova senha (RN-05.11 a 05.14)
   infra/
@@ -149,6 +150,7 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/requests?status=`, `/api/requests/:id` | operacao | Pedidos do site (`solicitado`, `ajuste_pedido`, `confirmado`, `recusado`, `cancelado`), com cliente, e-mail e WhatsApp |
 | POST | `/api/requests/:id/confirm` | operacao | Confirma: no aluguel cria a reserva em preparação (bloqueia, 24h para pagar); no transfer exige `price_cents` e cria o transfer. 409 se o período foi ocupado (o pedido volta a solicitado) ou se o valor do carro mudou. E-mail ao cliente |
 | POST | `/api/requests/:id/adjust`, `/api/requests/:id/refuse` | operacao | `{note}` obrigatório; e-mail ao cliente |
+| GET | `/api/partner/area` | area.parceiro | Área do parceiro da conta: `partner` (tipos e código), `vehicles` e `bookings` (proprietário; sem o cliente), `rides` (motorista; com o nome do cliente), `referrals` (todos; sem o cliente). Cada item traz `payout` (base, percentual, valor, pago em) ou nulo enquanto não gerado. Até 200 por lista |
 | GET | `/api/audit?user_id=&denied=true&limit=` | auditoria | Trilha de auditoria, mais recente primeiro (padrão 100, máximo 500); `denied=true` só os acessos negados |
 | GET | `/api/dashboard?month=AAAA-MM` | operacao | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
 
