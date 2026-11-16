@@ -3,6 +3,7 @@ package siterequest
 import (
 	"context"
 
+	"neonflow-api/internal/domain/account"
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/fleet"
 	"neonflow-api/internal/domain/transfer"
@@ -16,6 +17,10 @@ type Repository interface {
 	// PeriodTaken diz se o carro já tem reserva ativa no período.
 	PeriodTaken(ctx context.Context, vehicleID string, p booking.Period) (bool, error)
 	Create(ctx context.Context, n NewRequest) (Request, error)
+	// Guest é a conta de cliente do e-mail, criada sem senha e sem confirmar se não existir; ErrEmailInUse se
+	// o e-mail for de outro papel ou de conta desativada.
+	Guest(ctx context.Context, name, email string) (Guest, error)
+	SaveToken(ctx context.Context, t account.Token) error
 	List(ctx context.Context, status, customerID string) ([]Request, error)
 	Find(ctx context.Context, id string) (Detail, error)
 	// Transition muda a situação se ela for uma de from, grava a mensagem e o histórico.
@@ -44,6 +49,9 @@ type Mailer interface {
 }
 
 type Service interface {
+	// Quote e Guest são públicos: a página do carro mostra o valor e aceita o pedido sem conta (RN-02.38).
+	Quote(ctx context.Context, vehicleID, start, end string) (PublicQuote, error)
+	Guest(ctx context.Context, req GuestRequest) error
 	Cars(ctx context.Context, start, end string) ([]ClientCar, error)
 	Create(ctx context.Context, userID string, req CreateRequest) (Request, error)
 	Mine(ctx context.Context, userID string) ([]Request, error)

@@ -4,6 +4,7 @@
 package siterequest
 
 import (
+	"net/mail"
 	"regexp"
 	"strings"
 	"time"
@@ -15,11 +16,14 @@ const (
 	KindRental   = "aluguel"
 	KindTransfer = "transfer"
 
-	StatusRequested  = "solicitado"
-	StatusAdjustment = "ajuste_pedido"
-	StatusConfirmed  = "confirmado"
-	StatusRefused    = "recusado"
-	StatusCanceled   = "cancelado"
+	// StatusAwaitingEmail: pedido feito sem conta na página do carro, esperando o clique no e-mail (RN-02.38).
+	// A central não vê.
+	StatusAwaitingEmail = "aguardando_email"
+	StatusRequested     = "solicitado"
+	StatusAdjustment    = "ajuste_pedido"
+	StatusConfirmed     = "confirmado"
+	StatusRefused       = "recusado"
+	StatusCanceled      = "cancelado"
 )
 
 var (
@@ -153,9 +157,51 @@ type CreateRequest struct {
 	Flight       string `json:"flight"`
 }
 
+// GuestRequest é o pedido feito na página do carro sem conta: só o contato e o aluguel (RN-02.38).
+type GuestRequest struct {
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	WhatsApp     string `json:"whatsapp"`
+	Notes        string `json:"notes"`
+	ReferralCode string `json:"referral_code"`
+	VehicleID    string `json:"vehicle_id"`
+	StartAt      string `json:"start_at"`
+	EndAt        string `json:"end_at"`
+	Place        string `json:"place"`
+}
+
+// Validate confere o contato e, como pedido de aluguel, o carro e o período.
+func (g GuestRequest) Validate(now time.Time) (NewRequest, string, string, error) {
+	name := strings.TrimSpace(g.Name)
+	email := strings.ToLower(strings.TrimSpace(g.Email))
+	if name == "" {
+		return NewRequest{}, name, email, ErrNameRequired
+	}
+	if addr, err := mail.ParseAddress(email); err != nil || addr.Address != email {
+		return NewRequest{}, name, email, ErrInvalidEmail
+	}
+	n, err := CreateRequest{Kind: KindRental, WhatsApp: g.WhatsApp, Notes: g.Notes, ReferralCode: g.ReferralCode,
+		VehicleID: g.VehicleID, StartAt: g.StartAt, EndAt: g.EndAt, Place: g.Place}.Validate(now)
+	return n, name, email, err
+}
+
+// PublicQuote é o orçamento de um carro no período para o visitante: o valor e se o carro está livre.
+type PublicQuote struct {
+	Available bool `json:"available"`
+	Quote
+}
+
+// Guest é a conta do contato do pedido sem conta: a que já existe para o e-mail ou uma nova, sem senha.
+type Guest struct {
+	UserID string
+	Name   string
+}
+
 // NewRequest é o pedido validado. Quote é preenchido pelo serviço, com o carro de hoje.
 type NewRequest struct {
-	Kind         string
+	Kind string
+	// Status: vazio é "solicitado"; o pedido sem conta nasce "aguardando_email".
+	Status       string
 	CustomerID   string
 	UserID       string
 	WhatsApp     string

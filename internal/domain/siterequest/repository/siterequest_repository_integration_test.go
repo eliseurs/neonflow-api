@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"neonflow-api/internal/domain/account"
+	accountRepo "neonflow-api/internal/domain/account/repository"
 	"neonflow-api/internal/domain/booking"
 	bookingRepo "neonflow-api/internal/domain/booking/repository"
 	bookingService "neonflow-api/internal/domain/booking/service"
@@ -192,4 +194,81 @@ func TestSiteRequestService_ConfirmIntegration(t *testing.T) {
 	var price int64
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT price_cents FROM transfers WHERE id = $1`, *done.TransferID).Scan(&price))
 	assert.Equal(t, int64(35000), price)
+}
+
+// Pedido na página do carro sem conta (RN-02.38): fica invisível até o clique no e-mail; a confirmação liga a
+// conta ao cadastro da central com o mesmo e-mail e manda o pedido para a central.
+func TestGuestRequest_Integration(t *testing.T) {
+	db := testutil.MigratedDB(t, "../../../../sql/migrations")
+	ctx := context.Background()
+	s := seedDB(t, db)
+	repo := NewSiteRequestRepository(db)
+	accounts := accountRepo.NewAccountRepository(db)
+
+	// A central já atendeu a Bia pelo WhatsApp, com este e-mail.
+	var history string
+	require.NoError(t, db.QueryRowContext(ctx, `INSERT INTO customers (name, email) VALUES ('Bia da Central', 'bia@neonflow.test') RETURNING id`).Scan(&history))
+
+	g, err := repo.Guest(ctx, "Bia Teste", "bia@neonflow.test")
+	require.NoError(t, err)
+	again, err := repo.Guest(ctx, "Bia", "bia@neonflow.test")
+	require.NoError(t, err)
+	assert.Equal(t, g.UserID, again.UserID, "o mesmo e-mail usa a mesma conta")
+	_, err = repo.Guest(ctx, "X", "central@neonflow.test")
+	assert.ErrorIs(t, err, siterequest.ErrEmailInUse, "e-mail da equipe não vira cliente")
+
+	start := time.Now().Add(72 * time.Hour).Truncate(time.Minute)
+	p := booking.Period{Start: start, End: start.Add(48 * time.Hour)}
+	terms, err := repo.VehicleTerms(ctx, s.vehicle)
+	require.NoError(t, err)
+	quote, err := siterequest.QuoteFor(terms, p, "")
+	require.NoError(t, err)
+	pending, err := repo.Create(ctx, siterequest.NewRequest{Kind: "aluguel", Status: siterequest.StatusAwaitingEmail, UserID: g.UserID,
+		WhatsApp: "5554999990002", VehicleID: s.vehicle, Period: p, Quote: quote})
+	require.NoError(t, err)
+	assert.Equal(t, siterequest.StatusAwaitingEmail, pending.Status)
+	assert.Equal(t, "Bia Teste", pending.CustomerName, "antes da confirmação, o nome vem da conta")
+	assert.Empty(t, pending.CustomerID)
+
+	all, err := repo.List(ctx, "", "")
+	require.NoError(t, err)
+	assert.Empty(t, all, "a central não vê o pedido antes do clique no e-mail")
+
+	// Sem senha a conta não entra.
+	var hash string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = $1`, g.UserID).Scan(&hash))
+	assert.Empty(t, hash)
+
+	token, tokenHash, err := account.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, repo.SaveToken(ctx, account.Token{Purpose: account.PurposeConfirmEmail, Hash: tokenHash, UserID: g.UserID, ExpiresAt: time.Now().Add(time.Hour)}))
+	c, err := accounts.ConfirmEmail(ctx, account.HashToken(token))
+	require.NoError(t, err)
+	assert.Equal(t, 1, c.RequestsSent)
+	assert.False(t, c.HasPassword)
+
+	sent, err := repo.Find(ctx, pending.ID)
+	require.NoError(t, err)
+	assert.Equal(t, siterequest.StatusRequested, sent.Status)
+	assert.Equal(t, history, sent.CustomerID, "ligado ao cadastro que a central já tinha")
+	require.Len(t, sent.Events, 2)
+	assert.Equal(t, siterequest.StatusAwaitingEmail, *sent.Events[1].FromStatus)
+
+	// Cliente que já tem senha: o pedido também espera o clique, e a confirmação não pede senha.
+	token, tokenHash, err = account.NewToken()
+	require.NoError(t, err)
+	other, err := repo.Create(ctx, siterequest.NewRequest{Kind: "aluguel", Status: siterequest.StatusAwaitingEmail, UserID: s.client,
+		WhatsApp: "5554999990001", VehicleID: s.vehicle, Period: booking.Period{Start: p.Start.Add(240 * time.Hour), End: p.End.Add(240 * time.Hour)}, Quote: quote})
+	require.NoError(t, err)
+	require.NoError(t, repo.SaveToken(ctx, account.Token{Purpose: account.PurposeConfirmEmail, Hash: tokenHash, UserID: s.client, ExpiresAt: time.Now().Add(time.Hour)}))
+	c, err = accounts.ConfirmEmail(ctx, account.HashToken(token))
+	require.NoError(t, err)
+	assert.True(t, c.HasPassword)
+	sent, err = repo.Find(ctx, other.ID)
+	require.NoError(t, err)
+	assert.Equal(t, s.customer, sent.CustomerID)
+
+	// O banco recusa pedido sem cadastro fora de "aguardando_email".
+	_, err = db.ExecContext(ctx, `UPDATE site_requests SET customer_id = NULL WHERE id = $1`, other.ID)
+	assert.Error(t, err)
 }

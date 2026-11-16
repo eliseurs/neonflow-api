@@ -37,7 +37,7 @@ const (
 	queryConfirm = `
 		UPDATE users SET email_verified_at = coalesce(email_verified_at, now()), updated_at = now()
 		WHERE id = $1 AND active AND role = 'cliente'
-		RETURNING name, lower(email), coalesce(customer_id::text, '')`
+		RETURNING name, lower(email), coalesce(customer_id::text, ''), password_hash <> ''`
 	// Cadastro feito pela central com o mesmo e-mail e ainda sem conta: a conta passa a ver o histórico dele.
 	queryCustomersByEmail = `
 		SELECT c.id FROM customers c
@@ -46,7 +46,16 @@ const (
 		LIMIT 2`
 	queryCreateCustomer = `INSERT INTO customers (name, email) VALUES ($1, $2) RETURNING id`
 	queryLinkCustomer   = `UPDATE users SET customer_id = $2, updated_at = now() WHERE id = $1`
-	querySetPassword    = `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND active`
+	// Pedidos feitos sem conta seguem para a central quando o e-mail é confirmado (RN-02.38).
+	querySendRequests = `
+		WITH sent AS (
+			UPDATE site_requests SET status = 'solicitado', customer_id = $2, updated_at = now()
+			WHERE user_id = $1 AND status = 'aguardando_email'
+			RETURNING id
+		)
+		INSERT INTO site_request_events (request_id, from_status, to_status, user_id)
+		SELECT id, 'aguardando_email', 'solicitado', $1 FROM sent`
+	querySetPassword = `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 AND active`
 	// Uma senha nova invalida os outros links de nova senha ainda abertos.
 	queryCloseResetTokens = `
 		UPDATE account_tokens SET used_at = now()
@@ -106,30 +115,39 @@ func (r *AccountRepository) SaveToken(ctx context.Context, t account.Token) erro
 	return nil
 }
 
-func (r *AccountRepository) ConfirmEmail(ctx context.Context, tokenHash string) error {
-	return r.inTx(ctx, "confirm email", func(tx *sql.Tx) error {
+func (r *AccountRepository) ConfirmEmail(ctx context.Context, tokenHash string) (account.Confirmed, error) {
+	var c account.Confirmed
+	err := r.inTx(ctx, "confirm email", func(tx *sql.Tx) error {
 		userID, _, err := useToken(ctx, tx, tokenHash, account.PurposeConfirmEmail)
 		if err != nil {
 			return err
 		}
 		var name, email, customerID string
-		err = tx.QueryRowContext(ctx, queryConfirm, userID).Scan(&name, &email, &customerID)
+		err = tx.QueryRowContext(ctx, queryConfirm, userID).Scan(&name, &email, &customerID, &c.HasPassword)
 		if errors.Is(err, sql.ErrNoRows) {
 			return account.ErrInvalidToken
 		}
 		if err != nil {
 			return err
 		}
-		if customerID != "" {
-			return nil
+		c.UserID = userID
+		if customerID == "" {
+			if customerID, err = customerFor(ctx, tx, name, email); err != nil {
+				return err
+			}
+			if _, err = tx.ExecContext(ctx, queryLinkCustomer, userID, customerID); err != nil {
+				return err
+			}
 		}
-		customerID, err = customerFor(ctx, tx, name, email)
+		res, err := tx.ExecContext(ctx, querySendRequests, userID, customerID)
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, queryLinkCustomer, userID, customerID)
-		return err
+		n, _ := res.RowsAffected()
+		c.RequestsSent = int(n)
+		return nil
 	})
+	return c, err
 }
 
 // customerFor liga a conta ao único cadastro livre com o mesmo e-mail; com nenhum ou mais de um, cria um

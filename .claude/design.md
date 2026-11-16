@@ -80,7 +80,7 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | GET | `/api/auth/me` | JWT | Usuário do token, com `permissions` (o que o papel pode abrir) e, na conta de parceiro ou cliente, `partner_id` ou `customer_id`. Cliente com e-mail sem confirmar recebe 403 no login |
 | POST | `/api/partners/:id/invite` | operacao | Convida o parceiro: manda o link de criar senha para o e-mail dele (7 dias). Devolve `sent_to` e `expires_at`. 409 desativado, sem e-mail válido, já com conta ou e-mail usado por outra conta; 503 sem envio configurado |
 | POST | `/api/public/accounts/signup` | sem login | Cadastro do cliente (`name`, `email`, `password` com 10+): 202 e link de confirmação por e-mail (24 h). Mesma resposta se o e-mail já tem conta |
-| POST | `/api/public/accounts/confirm` | sem login | `{token}`: confirma o e-mail e liga a conta ao cadastro do cliente com o mesmo e-mail (ou cria um) |
+| POST | `/api/public/accounts/confirm` | sem login | `{token}`: confirma o e-mail, liga a conta ao cadastro do cliente com o mesmo e-mail (ou cria um) e manda à central os pedidos `aguardando_email`. Responde `requests_sent` e, se a conta não tem senha, `password_token` para criar a senha (usar em reset-password) |
 | POST | `/api/public/accounts/forgot-password` | sem login | `{email}`: 202 e link de nova senha (1 h) para conta ativa e confirmada; mesma resposta sem conta |
 | POST | `/api/public/accounts/reset-password`, `/api/public/accounts/accept-invite` | sem login | `{token, password}`: nova senha, ou criação da conta do parceiro convidado. 400 link inválido, vencido ou já usado |
 | GET | `/api/vehicles` | operacao | Lista a frota, com `status` (`manutencao`, `em_locacao`, `aguardando_checklist`, `reservado`, `livre`) e `next_booking` (RN-01.3) |
@@ -143,6 +143,8 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PATCH | `/api/transfers/:id/paid` | operacao | `{paid}` marca ou desmarca o pagamento do cliente |
 | POST | `/api/transfers/:id/start`, `/complete` | operacao | Inicia; conclui (`extra_wait_cents`, exige pagamento) e gera os pagamentos a parceiros |
 | POST | `/api/transfers/:id/cancel` | operacao | `{flight_cancelled}`; multa de 50% dentro de 24h (RN-02.10). Só antes de iniciar |
+| GET | `/api/public/fleet/:id/quote?start_at=&end_at=` | sem login | Orçamento do carro no período (`available`, diárias, total, caução, km), para o formulário da página do carro (RN-02.38) |
+| POST | `/api/public/requests` | sem login | Pedido de aluguel na página do carro: `name`, `email`, `whatsapp`, `vehicle_id`, `start_at`, `end_at`, `place`, `notes`, `referral_code`. 202 e e-mail "Confirme o seu pedido"; o pedido fica `aguardando_email` até o clique. 409 e-mail de outro papel ou período reservado; 503 sem envio |
 | GET | `/api/client/cars?start_at=&end_at=` | area.cliente | Carros livres no período com a estimativa: `days`, `daily_rate_cents`, `total_cents`, caução e km (RN-02.34). Sem placa nem dono |
 | GET, POST | `/api/client/requests` | area.cliente | Pedidos do próprio cliente; POST `{kind: aluguel\|transfer, whatsapp, notes, referral_code}` mais, no aluguel, `vehicle_id`, `start_at`, `end_at`, `place`, `km_plan`, e no transfer `origin`, `destination`, `pickup_at`, `passengers`, `flight`. Não bloqueia o carro; período já reservado → 409 |
 | GET, PUT | `/api/client/requests/:id` | area.cliente | Pedido com o histórico (`events`); PUT reenvia o pedido em ajuste (mesmo corpo do POST). Pedido de outro cliente → 404 |
@@ -181,7 +183,8 @@ audit_log                               -- V22, só inclusão (trigger), RN-05.9
   -- escritas (inclusive o login) e acessos negados; sem corpo nem query string
 
 site_requests (V24)                     -- pedidos do site, RN-02.33 a 02.37; não bloqueiam o carro
-  id, kind CHECK (aluguel|transfer), status CHECK (solicitado|ajuste_pedido|confirmado|recusado|cancelado)
+  id, kind CHECK (aluguel|transfer), status CHECK (aguardando_email|solicitado|ajuste_pedido|confirmado|recusado|cancelado)   -- V25: aguardando_email
+  -- customer_id só pode ser nulo em aguardando_email (V25)
   customer_id FK, user_id FK (a conta que pediu), whatsapp (dígitos), notes, referred_by_partner_id FK NULL
   vehicle_id, start_at, end_at, place, km_plan, days, daily_rate_cents, total_cents, deposit_cents, km_limit_per_day, extra_km_cents   -- aluguel e estimativa
   origin, destination, pickup_at, passengers, flight                                                              -- transfer

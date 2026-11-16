@@ -70,11 +70,24 @@ func (s *AccountService) Signup(ctx context.Context, req account.SignupRequest) 
 	})
 }
 
-func (s *AccountService) ConfirmEmail(ctx context.Context, req account.TokenRequest) error {
+// ConfirmEmail confirma a conta e manda à central os pedidos que esperavam. Conta sem senha (nascida do pedido
+// na página do carro) recebe um link de nova senha para criar a dela ali mesmo (RN-02.38).
+func (s *AccountService) ConfirmEmail(ctx context.Context, req account.TokenRequest) (account.Confirmation, error) {
 	if req.Token == "" {
-		return account.ErrInvalidToken
+		return account.Confirmation{}, account.ErrInvalidToken
 	}
-	return s.repo.ConfirmEmail(ctx, account.HashToken(req.Token))
+	c, err := s.repo.ConfirmEmail(ctx, account.HashToken(req.Token))
+	if err != nil {
+		return account.Confirmation{}, err
+	}
+	out := account.Confirmation{Confirmed: true, RequestsSent: c.RequestsSent}
+	if !c.HasPassword {
+		out.PasswordToken, err = s.issue(ctx, account.Token{Purpose: account.PurposeResetPassword, UserID: c.UserID}, account.ResetPasswordTTL)
+		if err != nil {
+			return account.Confirmation{}, err
+		}
+	}
+	return out, nil
 }
 
 // ForgotPassword manda o link de nova senha para qualquer conta ativa e confirmada (RN-05.14). A resposta

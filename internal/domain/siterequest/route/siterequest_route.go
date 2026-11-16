@@ -21,6 +21,11 @@ func Register(app *api.App, mail siterequest.Mailer) {
 	svc := service.NewSiteRequestService(repository.NewSiteRequestRepository(app.DB()), bookings, transfers, mail, app.Logger(), app.Configs().AppURL)
 	h := handler.NewSiteRequestHandler(svc, app.Logger())
 
+	// Página do carro, sem login (RN-02.38): o orçamento e o pedido com só o contato.
+	public := app.API(api.Routes{})
+	public.GET("/public/fleet/:id/quote", h.Quote)
+	public.POST("/public/requests", h.Guest)
+
 	client := app.API(api.Routes{Authorization: true, Permission: authz.CustomerArea})
 	client.GET("/client/cars", h.Cars)
 	client.GET("/client/requests", h.Mine)

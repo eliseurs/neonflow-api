@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"neonflow-api/internal/domain/account"
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/siterequest"
 	"neonflow-api/internal/domain/transfer"
@@ -26,6 +27,69 @@ type SiteRequestService struct {
 func NewSiteRequestService(repo siterequest.Repository, bookings siterequest.Bookings, transfers siterequest.Transfers,
 	mail siterequest.Mailer, log siterequest.Logger, appURL string) *SiteRequestService {
 	return &SiteRequestService{repo: repo, bookings: bookings, transfers: transfers, mail: mail, log: log, appURL: appURL, now: time.Now}
+}
+
+// Quote é o orçamento de um carro no período para a página pública do carro (RN-02.34, RN-02.38).
+func (s *SiteRequestService) Quote(ctx context.Context, vehicleID, start, end string) (siterequest.PublicQuote, error) {
+	p, err := booking.ParsePeriod(start, end)
+	if err != nil {
+		return siterequest.PublicQuote{}, err
+	}
+	q, err := s.quote(ctx, strings.TrimSpace(vehicleID), p, "")
+	if err != nil {
+		return siterequest.PublicQuote{}, err
+	}
+	taken, err := s.repo.PeriodTaken(ctx, strings.TrimSpace(vehicleID), p)
+	if err != nil {
+		return siterequest.PublicQuote{}, err
+	}
+	return siterequest.PublicQuote{Available: !taken, Quote: q}, nil
+}
+
+// Guest recebe o pedido feito na página do carro sem conta (RN-02.38): grava o pedido aguardando a confirmação
+// do e-mail, ligado à conta de cliente do e-mail (criada sem senha se não existir), e manda o link. Só ao clicar
+// o pedido vai para a central, então ninguém pede em nome do e-mail de outra pessoa.
+func (s *SiteRequestService) Guest(ctx context.Context, req siterequest.GuestRequest) error {
+	if !s.mail.Enabled() {
+		return email.ErrNotConfigured
+	}
+	n, name, addr, err := req.Validate(s.now())
+	if err != nil {
+		return err
+	}
+	if n, err = s.prepareRental(ctx, n); err != nil {
+		return err
+	}
+	g, err := s.repo.Guest(ctx, name, addr)
+	if err != nil {
+		return err
+	}
+	n.UserID, n.Status = g.UserID, siterequest.StatusAwaitingEmail
+	r, err := s.repo.Create(ctx, n)
+	if err != nil {
+		return err
+	}
+	token, hash, err := account.NewToken()
+	if err != nil {
+		return err
+	}
+	if err := s.repo.SaveToken(ctx, account.Token{Purpose: account.PurposeConfirmEmail, Hash: hash, UserID: g.UserID,
+		ExpiresAt: s.now().Add(account.ConfirmEmailTTL)}); err != nil {
+		return err
+	}
+	err = s.mail.Send(ctx, email.Message{
+		To:      addr,
+		Subject: "Confirme o seu pedido · Neon Flow",
+		Text: fmt.Sprintf("Olá, %s.\n\nRecebemos o seu pedido de %s, no valor estimado de %s.\n\n"+
+			"Para enviá-lo à central, abra o link abaixo em até 24 horas:\n\n%s/conta/confirmar/%s\n\n"+
+			"O carro fica reservado quando a central confirmar. Se você não fez este pedido, ignore este e-mail.\n\nNeon Flow",
+			name, describe(r), transfer.FormatReais(*r.TotalCents), s.appURL, token),
+	})
+	if err != nil {
+		s.log.Error("site request email failed", "subject", "confirmar pedido", "error", err)
+		return siterequest.ErrSendFailed
+	}
+	return nil
 }
 
 // Cars lista os carros livres no período com a estimativa de cada um (RN-02.34).
@@ -72,6 +136,12 @@ func (s *SiteRequestService) prepare(ctx context.Context, req siterequest.Create
 	if err != nil || n.Kind != siterequest.KindRental {
 		return n, err
 	}
+	return s.prepareRental(ctx, n)
+}
+
+// prepareRental grava a estimativa de hoje e recusa o período já reservado.
+func (s *SiteRequestService) prepareRental(ctx context.Context, n siterequest.NewRequest) (siterequest.NewRequest, error) {
+	var err error
 	n.Quote, err = s.quote(ctx, n.VehicleID, n.Period, n.KmPlan)
 	if err != nil {
 		return n, err

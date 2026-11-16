@@ -13,6 +13,7 @@ import (
 
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/siterequest"
+	"neonflow-api/internal/infra/email"
 )
 
 type fakeService struct {
@@ -21,6 +22,10 @@ type fakeService struct {
 	conf siterequest.ConfirmRequest
 }
 
+func (f *fakeService) Quote(context.Context, string, string, string) (siterequest.PublicQuote, error) {
+	return siterequest.PublicQuote{Available: true}, f.err
+}
+func (f *fakeService) Guest(context.Context, siterequest.GuestRequest) error { return f.err }
 func (f *fakeService) Cars(context.Context, string, string) ([]siterequest.ClientCar, error) {
 	return []siterequest.ClientCar{}, f.err
 }
@@ -62,6 +67,8 @@ func do(svc siterequest.Service, log siterequest.Logger, method, path, body stri
 	h := NewSiteRequestHandler(svc, log)
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("userID", "u1") })
+	r.GET("/public/fleet/:id/quote", h.Quote)
+	r.POST("/public/requests", h.Guest)
 	r.GET("/client/cars", h.Cars)
 	r.GET("/client/requests", h.Mine)
 	r.POST("/client/requests", h.Create)
@@ -85,6 +92,8 @@ func TestHandler_Routes(t *testing.T) {
 		method, path, body string
 		status             int
 	}{
+		{http.MethodGet, "/public/fleet/v1/quote?start_at=a&end_at=b", "", http.StatusOK},
+		{http.MethodPost, "/public/requests", `{"name":"Ana"}`, http.StatusAccepted},
 		{http.MethodGet, "/client/cars?start_at=a&end_at=b", "", http.StatusOK},
 		{http.MethodGet, "/client/requests", "", http.StatusOK},
 		{http.MethodPost, "/client/requests", `{"kind":"aluguel"}`, http.StatusCreated},
@@ -124,6 +133,10 @@ func TestHandler_Errors(t *testing.T) {
 		{siterequest.ErrNotFound, http.StatusNotFound},
 		{booking.ErrVehicleNotFound, http.StatusNotFound},
 		{siterequest.ErrPriceChanged, http.StatusConflict},
+		{siterequest.ErrEmailInUse, http.StatusConflict},
+		{siterequest.ErrInvalidEmail, http.StatusBadRequest},
+		{email.ErrNotConfigured, http.StatusServiceUnavailable},
+		{siterequest.ErrSendFailed, http.StatusBadGateway},
 		{booking.ErrPeriodUnavailable, http.StatusConflict},
 	}
 	for _, tc := range cases {

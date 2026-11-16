@@ -89,6 +89,22 @@ type PartnerContact struct {
 	EmailTaken bool
 }
 
+// Confirmed é o que a confirmação do e-mail fez: quantos pedidos do site foram para a central e se a conta
+// ainda não tem senha (conta criada pelo pedido na página do carro, RN-02.38).
+type Confirmed struct {
+	UserID       string
+	RequestsSent int
+	HasPassword  bool
+}
+
+// Confirmation é a resposta da confirmação. PasswordToken, quando a conta não tem senha, é um link de nova
+// senha para o cliente criar a dele na mesma tela; quem abriu o link do e-mail já provou ser o dono.
+type Confirmation struct {
+	Confirmed     bool   `json:"confirmed"`
+	RequestsSent  int    `json:"requests_sent"`
+	PasswordToken string `json:"password_token,omitempty"`
+}
+
 // Invite é a resposta à central: para onde foi o convite e até quando vale.
 type Invite struct {
 	SentTo    string    `json:"sent_to"`
