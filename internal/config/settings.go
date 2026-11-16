@@ -29,6 +29,21 @@ type Configs struct {
 	JWTExpiryHours int
 	AllowedOrigins []string
 	Storage        Storage
+	Email          Email
+	// AppURL é o endereço do neonflow-app; os links dos e-mails apontam para as páginas dele.
+	AppURL string
+}
+
+// Email é o envio pelo Resend (ADR-0016). Sem a chave e o remetente, o cadastro do cliente, o convite
+// do parceiro e o "esqueci a senha" respondem que o envio não está configurado.
+type Email struct {
+	APIKey string
+	From   string
+}
+
+// Enabled diz se a chave e o remetente estão definidos.
+func (e Email) Enabled() bool {
+	return e.APIKey != "" && e.From != ""
 }
 
 // Storage é o armazenamento de arquivos compatível com S3 (bucket do Railway hoje, Cloudflare R2 depois;
@@ -63,6 +78,11 @@ func Load() Configs {
 			AccessKey: getEnv("STORAGE_ACCESS_KEY_ID", ""),
 			SecretKey: getEnv("STORAGE_SECRET_ACCESS_KEY", ""),
 		},
+		Email: Email{
+			APIKey: getEnv("RESEND_API_KEY", ""),
+			From:   getEnv("EMAIL_FROM", ""),
+		},
+		AppURL: strings.TrimRight(getEnv("APP_URL", "http://localhost:5173"), "/"),
 	}
 }
 

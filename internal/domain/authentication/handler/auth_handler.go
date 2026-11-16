@@ -33,6 +33,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			api.RespondError(c, http.StatusUnauthorized, authentication.ErrInvalidCredentials.Error())
 			return
 		}
+		if errors.Is(err, authentication.ErrEmailNotVerified) {
+			api.RespondError(c, http.StatusForbidden, err.Error())
+			return
+		}
 		h.log.Error("login failed", "error", err)
 		api.RespondError(c, http.StatusInternalServerError, "erro interno")
 		return

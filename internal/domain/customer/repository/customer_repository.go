@@ -58,6 +58,10 @@ const (
 			UPDATE bookings SET client_name = $2 WHERE customer_id IN (SELECT id FROM c)
 		), t AS (
 			UPDATE transfers SET client_name = $2, notes = '' WHERE customer_id IN (SELECT id FROM c)
+		), u AS (
+			-- A conta do cliente no site perde o acesso e os dados pessoais (RN-05.13).
+			UPDATE users SET name = $2, email = 'anonimizado-' || id || '@neonflow.invalid', active = false, updated_at = now()
+			WHERE customer_id IN (SELECT id FROM c)
 		)
 		SELECT count(*) FROM c`
 )

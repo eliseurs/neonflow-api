@@ -79,6 +79,7 @@ func TestLogin(t *testing.T) {
 		{"ok", fakeService{}, `{"email":"a@b.test","password":"x"}`, http.StatusOK, `"token":"tok"`},
 		{"json inválido", fakeService{}, `{`, http.StatusBadRequest, "corpo da requisição inválido"},
 		{"credencial inválida", fakeService{loginErr: authentication.ErrInvalidCredentials}, `{"email":"a@b.test","password":"x"}`, http.StatusUnauthorized, "e-mail ou senha inválidos"},
+		{"e-mail sem confirmar", fakeService{loginErr: authentication.ErrEmailNotVerified}, `{"email":"a@b.test","password":"x"}`, http.StatusForbidden, "confirme o seu e-mail"},
 		{"erro interno", fakeService{loginErr: errors.New("db")}, `{"email":"a@b.test","password":"x"}`, http.StatusInternalServerError, "erro interno"},
 	}
 	for _, tc := range cases {
