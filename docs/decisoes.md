@@ -35,7 +35,7 @@ Alguém precisa responder ou informar algo antes de haver o que implementar.
 | PEN-70 | Modelo contratual do lançamento: Neon Flow intermediador (parceiro é o locador) ou central operando a frota | Fundador + jurídico | Ordem 04 preenchida com os dados da reserva; situação do cadastro do veículo |
 | PEN-67 | Transfer com carro de parceiro dirigido por outra pessoa: o dono recebe? Quanto e sobre qual base? | Fundador | Repasse do transfer (hoje só o motorista recebe) |
 | PEN-65 | Acordos com hotéis e autorização de uso de nome e foto | Fundador | Comissão de hotel com acordo válido (RN-03.2); divulgação com parceiros |
-| PEN-14 | O que proprietário, motorista, indicador e cliente veem e fazem na própria área. O login de todos existe desde 16/11/2026 (RN-05.11 a RN-05.14) | Produto | Área do parceiro (PEN-16, PEN-17), aceite pelo motorista (PEN-74), área do cliente (PEN-15) |
+| PEN-14 | Decidido em 16/11/2026 o que o parceiro vê (RN-07.8 a 07.11) e o que o cliente faz (RN-02.33 a 02.37). Resta o aceite da corrida pelo motorista (PEN-74, decidido: oferta aberta) | Produto | Aceite pelo motorista (PEN-74) |
 | PEN-11 | Metas dos indicadores | Fundador | Medir antes de expandir (`produto/metricas.md` com metas em branco) |
 | PEN-37 | Namespace técnico `neoflow` × `neonflow` ([ADR-0005](adr/ADR-0005-namespace-tecnico.md), não decidido) | Fundador + arquitetura | Integração com o Nexus; nenhum código cria namespace até lá |
 

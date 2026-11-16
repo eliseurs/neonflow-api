@@ -8,6 +8,17 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-16] — Área do parceiro (RN-07.8 a 07.11)
+
+Decisões do fundador no CLI: o proprietário vê datas e valores sem o cliente; o motorista vê tudo para executar a corrida (com o nome do cliente, sem o telefone); o indicador vê serviço, data e comissão; os valores mostram a base e o percentual.
+
+- Domínio `partnerarea`, `GET /api/partner/area` (`area.parceiro`): o parceiro vem da conta logada no banco (ativo), nunca da requisição. Carros e reservas só para o proprietário, corridas só para o motorista, indicações para todos. Pagamento (`payout`) de cada item com base, percentual, valor e data do pagamento.
+- Sem migration: lê `vehicles`, `bookings`, `transfers` e `partner_payouts`.
+- Testes: entidade, serviço, handler, rota (cliente e central recebem 403) e integração com dois parceiros (um não vê o do outro; o nome do cliente e as observações do transfer não saem). Cobertura de `internal/`: 95,2%.
+- Regras: RN-07.8 a RN-07.11; PEN-14 e PEN-17 atualizadas.
+
+---
+
 ## [2026-11-16] — Pedidos do site: o cliente pede, a central responde (RN-02.33 a 02.37)
 
 Decisões do fundador no CLI: só cliente com conta pede; o pedido bloqueia só quando a central confirma (resolve PEN-73); retorno por e-mail, Minha conta e botão de WhatsApp na central (resolve PEN-77); aluguel e transfer; o cliente vê a estimativa; no ajuste, o cliente edita e reenvia.
