@@ -23,7 +23,7 @@ func (f fakeService) Login(_ context.Context, req authentication.LoginRequest) (
 	if f.loginErr != nil {
 		return authentication.LoginResponse{}, f.loginErr
 	}
-	return authentication.LoginResponse{Token: "tok", User: authentication.User{ID: "u1", Email: req.Email}}, nil
+	return authentication.LoginResponse{Token: "tok", User: authentication.User{ID: "u1", Email: req.Email, Role: "central"}}, nil
 }
 
 func (f fakeService) Me(_ context.Context, id string) (authentication.User, error) {
@@ -46,7 +46,11 @@ func router(svc authentication.Service, userID string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	h := NewAuthHandler(svc, nopLog{})
 	r := gin.New()
-	r.POST("/login", h.Login)
+	r.POST("/login", func(c *gin.Context) {
+		h.Login(c)
+		// O login identifica o usuário para a auditoria (RN-05.9).
+		c.Header("X-Audit", c.GetString("userID")+":"+c.GetString("role"))
+	})
 	r.GET("/me", func(c *gin.Context) {
 		if userID != "" {
 			c.Set("userID", userID)
@@ -82,6 +86,11 @@ func TestLogin(t *testing.T) {
 			w := do(router(tc.svc, ""), http.MethodPost, "/login", tc.body)
 			assert.Equal(t, tc.status, w.Code)
 			assert.Contains(t, w.Body.String(), tc.want)
+			if tc.status == http.StatusOK {
+				assert.Equal(t, "u1:central", w.Header().Get("X-Audit"))
+			} else {
+				assert.Equal(t, ":", w.Header().Get("X-Audit"), "login recusado não identifica ninguém")
+			}
 		})
 	}
 }

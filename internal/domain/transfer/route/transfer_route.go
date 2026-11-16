@@ -1,11 +1,11 @@
 package route
 
 import (
-	"neonflow-api/internal/domain/authentication"
 	"neonflow-api/internal/domain/transfer/handler"
 	"neonflow-api/internal/domain/transfer/repository"
 	"neonflow-api/internal/domain/transfer/service"
 	"neonflow-api/internal/infra/api"
+	"neonflow-api/internal/pkg/authz"
 )
 
 // Register expõe o transfer para a central; motoristas ainda não entram no painel (RN-05.6).
@@ -14,7 +14,7 @@ func Register(app *api.App) {
 	svc := service.NewTransferService(repo)
 	h := handler.NewTransferHandler(svc, app.Logger())
 
-	g := app.API(api.Routes{Authorization: true, Roles: []string{authentication.RoleAdmin, authentication.RoleCentral}})
+	g := app.API(api.Routes{Authorization: true, Permission: authz.Operation})
 	g.GET("/transfers", h.List)
 	g.POST("/transfers", h.Create)
 	g.GET("/transfers/:id", h.Get)

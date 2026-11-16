@@ -45,13 +45,15 @@ internal/
     maintenance/            # histórico de manutenção do veículo (RN-01.10)
     terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
     contract/               # os seis contratos em versões com hash e a revisão jurídica append-only (RN-08, ADR-0015)
+    audit/                  # consulta da trilha de auditoria das rotas (RN-05.9)
   infra/
-    api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown
+    api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown; store (papel atual e gravação da auditoria)
     db/                     # Open (pool + ping)
     migrator/               # runner V{N}_*.sql (transação por migration)
   config/                   # settings (env + defaults locais)
   pkg/
-    middleware/             # JWT auth, role guard, CORS
+    authz/                  # matriz papel → permissões (RN-05.10)
+    middleware/             # JWT auth com papel do banco, guarda por permissão, auditoria, CORS
     timezone/               # fuso da operação (America/Sao_Paulo)
     security/               # TokenProvider (JWT), BcryptHasher
     logger/                 # slog (JSON em produção)
@@ -70,69 +72,72 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET | `/health`, `/api/health` | — | 200 com banco ok, 503 sem banco |
-| POST | `/api/auth/login` | — | `{email, password}` → `{token, expires_at, user}` |
-| GET | `/api/auth/me` | JWT | Usuário do token |
-| GET | `/api/vehicles` | admin, central | Lista a frota, com `status` (`manutencao`, `em_locacao`, `aguardando_checklist`, `reservado`, `livre`) e `next_booking` (RN-01.3) |
-| GET | `/api/vehicles/:id` | admin, central | Um veículo, com `status` e `next_booking` |
-| POST | `/api/vehicles` | admin, central | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance` e, opcionais, `deposit_cents`, `km_limit_per_day` com `extra_km_cents`) |
-| PUT | `/api/vehicles/:id` | admin, central | Substitui todos os campos (inclusive manutenção) |
-| GET | `/api/availability?start_at=&end_at=` | admin, central | Veículos fora de manutenção e sem reserva ativa no intervalo (`start_date`/`end_date` só com a data ainda são aceitos e viram 09:00) |
-| GET | `/api/bookings?vehicle_id=` | admin, central | Lista reservas |
-| GET | `/api/bookings/:id` | admin, central | Uma reserva |
-| GET | `/api/bookings/:id/events` | admin, central | Histórico de etapas |
-| POST | `/api/bookings` | admin, central | Pré-reserva (`vehicle_id`, `client_name`, `start_at`, `end_at`, `place`, `km_plan` livre|limitado): bloqueia o intervalo. Data e hora `AAAA-MM-DDTHH:MM` no horário de Gramado ou RFC 3339 |
-| PATCH | `/api/bookings/:id/checks` | admin, central | Marca conferências da etapa atual (`{"cnh": true}`) |
-| POST | `/api/bookings/:id/advance` | admin, central | Próxima etapa, se as conferências estão feitas. Corpo opcional `{"at": "AAAA-MM-DDTHH:MM", "km": 12345}`: hora real e odômetro da entrega ou da devolução (hora padrão: agora; km obrigatório no plano limitado). Na devolução, calcula o atraso (RN-02.19) |
-| POST | `/api/bookings/:id/cancel` | admin, central | Cancela (preparação ou confirmada) e libera o período |
-| GET | `/api/checklist-items` | admin, central | Itens do checklist de devolução, em ordem (ativos e inativos) |
-| POST | `/api/checklist-items` | admin, central | Novo item (`label`, `position`, `active`); a chave sai do nome e não muda |
-| PUT | `/api/checklist-items/:id` | admin, central | Troca `label`, `position` e `active` (ausente mantém) |
-| GET | `/api/users` | admin | Usuários do painel (ativos primeiro) |
-| POST | `/api/users` | admin | Cria (`name`, `email`, `password` com 10+ caracteres, `role`) |
-| PUT | `/api/users/:id` | admin | Troca `name`, `role` e `active` (ausente mantém). 409 se o admin tentar se desativar ou deixar de ser admin |
-| POST | `/api/users/:id/password` | admin | Redefine a senha de outro usuário (`password`) |
+| POST | `/api/auth/login` | — | `{email, password}` → `{token, expires_at, user}`; `user.permissions` como no `/auth/me` |
+| GET | `/api/auth/me` | JWT | Usuário do token, com `permissions` (o que o papel pode abrir) |
+| GET | `/api/vehicles` | operacao | Lista a frota, com `status` (`manutencao`, `em_locacao`, `aguardando_checklist`, `reservado`, `livre`) e `next_booking` (RN-01.3) |
+| GET | `/api/vehicles/:id` | operacao | Um veículo, com `status` e `next_booking` |
+| POST | `/api/vehicles` | operacao | Cadastra (`plate`, `name`, `category`, `owner`, `seats`, `gear`, `daily_rate_cents`, `in_maintenance` e, opcionais, `deposit_cents`, `km_limit_per_day` com `extra_km_cents`) |
+| PUT | `/api/vehicles/:id` | operacao | Substitui todos os campos (inclusive manutenção) |
+| GET | `/api/availability?start_at=&end_at=` | operacao | Veículos fora de manutenção e sem reserva ativa no intervalo (`start_date`/`end_date` só com a data ainda são aceitos e viram 09:00) |
+| GET | `/api/bookings?vehicle_id=` | operacao | Lista reservas |
+| GET | `/api/bookings/:id` | operacao | Uma reserva |
+| GET | `/api/bookings/:id/events` | operacao | Histórico de etapas |
+| POST | `/api/bookings` | operacao | Pré-reserva (`vehicle_id`, `client_name`, `start_at`, `end_at`, `place`, `km_plan` livre|limitado): bloqueia o intervalo. Data e hora `AAAA-MM-DDTHH:MM` no horário de Gramado ou RFC 3339 |
+| PATCH | `/api/bookings/:id/checks` | operacao | Marca conferências da etapa atual (`{"cnh": true}`) |
+| POST | `/api/bookings/:id/advance` | operacao | Próxima etapa, se as conferências estão feitas. Corpo opcional `{"at": "AAAA-MM-DDTHH:MM", "km": 12345}`: hora real e odômetro da entrega ou da devolução (hora padrão: agora; km obrigatório no plano limitado). Na devolução, calcula o atraso (RN-02.19) |
+| POST | `/api/bookings/:id/cancel` | operacao | Cancela (preparação ou confirmada) e libera o período |
+| GET | `/api/checklist-items` | operacao | Itens do checklist de devolução, em ordem (ativos e inativos) |
+| POST | `/api/checklist-items` | operacao | Novo item (`label`, `position`, `active`); a chave sai do nome e não muda |
+| PUT | `/api/checklist-items/:id` | operacao | Troca `label`, `position` e `active` (ausente mantém) |
+| GET | `/api/users` | usuarios | Usuários do painel (ativos primeiro) |
+| POST | `/api/users` | usuarios | Cria (`name`, `email`, `password` com 10+ caracteres, `role`) |
+| PUT | `/api/users/:id` | usuarios | Troca `name`, `role` e `active` (ausente mantém). 409 se o admin tentar se desativar ou deixar de ser admin |
+| POST | `/api/users/:id/password` | usuarios | Redefine a senha de outro usuário (`password`) |
 | POST | `/api/auth/password` | todos | Troca a própria senha (`current_password`, `new_password`) |
-| GET | `/api/partners?kind=` | admin, central | Parceiros (ativos primeiro); `kind` = proprietario, motorista ou indicador |
-| GET | `/api/partners/:id` | admin, central | Um parceiro |
-| GET | `/api/partners/code/:code` | admin, central | Parceiro pelo código de indicação |
-| POST | `/api/partners` | admin, central | Cria (`name`, `kinds[]`, contato, percentuais 0–100 ou nulo); gera `referral_code` |
-| PUT | `/api/partners/:id` | admin, central | Substitui os dados (o código não muda); `active` ausente mantém |
-| GET | `/api/payouts?kind=&status=&partner_id=` | admin, central | Comissões (`comissao`) e repasses (`repasse`); `status` pendente ou paga |
-| POST | `/api/payouts/:id/pay` | admin, central | Marca como pago (data e quem marcou). 409 se já pago ou sem percentual |
-| GET | `/api/customers?q=` | admin, central | Clientes (busca por nome, e-mail ou dígitos do WhatsApp; até 200; anonimizados por último) |
-| GET | `/api/customers/:id` | admin, central | Cliente e histórico de reservas e transfers |
-| POST, PUT | `/api/customers`, `/api/customers/:id` | admin, central | `name`, `whatsapp` (único), `email`, `language` (pt\|en), `notes`. 409 se o WhatsApp já existe ou o cliente foi anonimizado |
-| POST | `/api/customers/:id/anonymize` | admin | Apaga nome e contatos, também nos pedidos (LGPD) |
-| GET, POST | `/api/vehicles/:id/photos` | admin, central | Fotos do veículo; envio em multipart (`file`, JPEG/PNG/WebP, até 10 MB). Cada foto traz `url` assinada por 15 min |
-| GET, POST | `/api/bookings/:id/photos?stage=entrega\|devolucao` | admin, central | Fotos da reserva por etapa; entrega em confirmada/em locação, devolução em locação/devolvida (409 fora disso) |
-| DELETE | `/api/photos/:id`; POST `/api/photos/:id/cover` | admin, central | Apaga do bucket e do banco (com as versões); capa do veículo |
-| GET | `/api/vehicles/stats`, `/api/vehicles/:id/stats` | admin, central | Desempenho dos últimos 12 meses: reservas, dias, ocupação, receita, km, manutenção e resultado (RN-01.10) |
-| GET, POST | `/api/vehicles/:id/maintenance` | admin, central | Histórico de manutenção (`date` AAAA-MM-DD não futura, `kind` preventiva\|corretiva\|revisao\|pneus\|outros, `description`, `cost_cents`, `odometer_km`, `workshop`) |
-| PUT, DELETE | `/api/maintenance/:id` | admin, central | Corrige ou apaga um registro |
+| GET | `/api/partners?kind=` | operacao | Parceiros (ativos primeiro); `kind` = proprietario, motorista ou indicador |
+| GET | `/api/partners/:id` | operacao | Um parceiro |
+| GET | `/api/partners/code/:code` | operacao | Parceiro pelo código de indicação |
+| POST | `/api/partners` | operacao | Cria (`name`, `kinds[]`, contato, percentuais 0–100 ou nulo); gera `referral_code` |
+| PUT | `/api/partners/:id` | operacao | Substitui os dados (o código não muda); `active` ausente mantém |
+| GET | `/api/payouts?kind=&status=&partner_id=` | operacao | Comissões (`comissao`) e repasses (`repasse`); `status` pendente ou paga |
+| POST | `/api/payouts/:id/pay` | operacao | Marca como pago (data e quem marcou). 409 se já pago ou sem percentual |
+| GET | `/api/customers?q=` | operacao | Clientes (busca por nome, e-mail ou dígitos do WhatsApp; até 200; anonimizados por último) |
+| GET | `/api/customers/:id` | operacao | Cliente e histórico de reservas e transfers |
+| POST, PUT | `/api/customers`, `/api/customers/:id` | operacao | `name`, `whatsapp` (único), `email`, `language` (pt\|en), `notes`. 409 se o WhatsApp já existe ou o cliente foi anonimizado |
+| POST | `/api/customers/:id/anonymize` | clientes.anonimizar | Apaga nome e contatos, também nos pedidos (LGPD) |
+| GET, POST | `/api/vehicles/:id/photos` | operacao | Fotos do veículo; envio em multipart (`file`, JPEG/PNG/WebP, até 10 MB). Cada foto traz `url` assinada por 15 min |
+| GET, POST | `/api/bookings/:id/photos?stage=entrega\|devolucao` | operacao | Fotos da reserva por etapa; entrega em confirmada/em locação, devolução em locação/devolvida (409 fora disso) |
+| DELETE | `/api/photos/:id`; POST `/api/photos/:id/cover` | operacao | Apaga do bucket e do banco (com as versões); capa do veículo |
+| GET | `/api/vehicles/stats`, `/api/vehicles/:id/stats` | operacao | Desempenho dos últimos 12 meses: reservas, dias, ocupação, receita, km, manutenção e resultado (RN-01.10) |
+| GET, POST | `/api/vehicles/:id/maintenance` | operacao | Histórico de manutenção (`date` AAAA-MM-DD não futura, `kind` preventiva\|corretiva\|revisao\|pneus\|outros, `description`, `cost_cents`, `odometer_km`, `workshop`) |
+| PUT, DELETE | `/api/maintenance/:id` | operacao | Corrige ou apaga um registro |
 | GET | `/api/public/fleet/:id` | sem login | Página do carro: ficha e todas as fotos (`photo_ids`, capa primeiro); sem placa, diária nem proprietário |
 | GET | `/api/public/fleet` | sem login | Carros fora de manutenção (Economy primeiro) com `photo_id` da capa; cache 5 min |
 | GET | `/api/public/photos/:id/w/640\|1280\|1920` | sem login | Versão JPEG da foto de veículo (nunca de reserva), gerada na primeira vez e guardada; cache de um ano |
-| GET | `/api/terms`; POST `/api/terms` | admin, central; POST só admin | Versões dos termos; publicar cria a próxima versão |
-| POST | `/api/bookings/:id/terms-link` | admin, central | Link de aceite (7 dias; só o hash no banco). 409 sem termos ou depois da retirada |
-| GET | `/api/bookings/:id/terms` | admin, central | Último aceite (`null` se não houve) |
+| GET | `/api/terms`; POST `/api/terms` | operacao; POST termos.publicar | Versões dos termos; publicar cria a próxima versão |
+| POST | `/api/bookings/:id/terms-link` | operacao | Link de aceite (7 dias; só o hash no banco). 409 sem termos ou depois da retirada |
+| GET | `/api/bookings/:id/terms` | operacao | Último aceite (`null` se não houve) |
 | GET, POST | `/api/public/terms/:token`, `/api/public/terms/:token/accept` | sem login | Página do cliente: quadro da reserva (com `quadro_sha256`) e a Ordem 04 publicada (`order`) ou, sem ela, os termos atuais (`terms`). Aceite dos termos: `typed_name` e `version`. Aceite da Ordem: `typed_name`, `contract_version_id`, `sha256`, `quadro_sha256` e `confirm: true` (409 se o texto ou o quadro mudaram; 400 sem a caixa) |
-| GET | `/api/contracts` | admin, legal_reviewer | Os seis contratos com a última versão (`version`, `label`, `sha256`, `status`) |
-| GET, POST | `/api/contracts/:code/versions` | admin, legal_reviewer; POST só admin | Versões do contrato (mais nova primeiro); POST `{label, body}` cria a próxima versão como `minuta`, com o SHA-256 do texto |
-| GET | `/api/contract-versions/:id` | admin, legal_reviewer | Texto, hash, situação, eventos e comentários da versão |
-| POST | `/api/contract-versions/:id/comments` | admin, legal_reviewer | `{clause, kind (observacao\|correcao), body, proposed_text}`; autor vem do JWT |
-| POST | `/api/contract-versions/:id/events` | admin, legal_reviewer | `{action, note, sha256, confirm}`. Admin: `enviar`, `liberar`, `publicar`. Revisora (e o admin, até a advogada ter conta, RN-08.4): `solicitar_ajustes` e `revogar` (com `note`), `aprovar` (com o `sha256` lido e `confirm: true`). 403 papel errado, 409 situação errada ou hash diferente |
-| GET | `/api/transfers` | admin, central | Transfers (mais recentes primeiro) |
-| POST | `/api/transfers` | admin, central | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
-| GET | `/api/transfers/:id`, `/api/transfers/:id/events` | admin, central | Detalhe e histórico |
-| GET | `/api/transfers/:id/drivers` | admin, central | Quem pode dirigir (motoristas e proprietários ativos), com WhatsApp, corridas no mesmo dia e carros de que é dono |
-| POST | `/api/transfers/:id/offer` | admin, central | Define ou aumenta o valor para o motorista (`offer_cents`); não diminui. Só em aguardando_motorista |
-| POST | `/api/transfers/:id/notify` | admin, central | Registra no histórico que o motorista foi chamado no WhatsApp (`driver_partner_id`) |
-| POST | `/api/transfers/:id/accept` | admin, central | Marca quem aceitou (`driver_partner_id`, `offer_cents` opcional, `vehicle_id` opcional); exige valor |
-| POST | `/api/transfers/:id/release` | admin, central | Motorista desistiu: volta para aguardando, sem penalidade |
-| PATCH | `/api/transfers/:id/paid` | admin, central | `{paid}` marca ou desmarca o pagamento do cliente |
-| POST | `/api/transfers/:id/start`, `/complete` | admin, central | Inicia; conclui (`extra_wait_cents`, exige pagamento) e gera os pagamentos a parceiros |
-| POST | `/api/transfers/:id/cancel` | admin, central | `{flight_cancelled}`; multa de 50% dentro de 24h (RN-02.10). Só antes de iniciar |
-| GET | `/api/dashboard?month=AAAA-MM` | admin, central | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
+| GET | `/api/contracts` | contratos | Os seis contratos com a última versão (`version`, `label`, `sha256`, `status`) |
+| GET, POST | `/api/contracts/:code/versions` | contratos; POST só admin (no serviço) | Versões do contrato (mais nova primeiro); POST `{label, body}` cria a próxima versão como `minuta`, com o SHA-256 do texto |
+| GET | `/api/contract-versions/:id` | contratos | Texto, hash, situação, eventos e comentários da versão |
+| POST | `/api/contract-versions/:id/comments` | contratos | `{clause, kind (observacao\|correcao), body, proposed_text}`; autor vem do JWT |
+| POST | `/api/contract-versions/:id/events` | contratos | `{action, note, sha256, confirm}`. Admin: `enviar`, `liberar`, `publicar`. Revisora (e o admin, até a advogada ter conta, RN-08.4): `solicitar_ajustes` e `revogar` (com `note`), `aprovar` (com o `sha256` lido e `confirm: true`). 403 papel errado, 409 situação errada ou hash diferente |
+| GET | `/api/transfers` | operacao | Transfers (mais recentes primeiro) |
+| POST | `/api/transfers` | operacao | Cria (`client_name`, `pickup_at` AAAA-MM-DDTHH:MM, `origin`, `destination`, `flight`, `passengers`, `price_cents`, `referred_by_partner_id`) |
+| GET | `/api/transfers/:id`, `/api/transfers/:id/events` | operacao | Detalhe e histórico |
+| GET | `/api/transfers/:id/drivers` | operacao | Quem pode dirigir (motoristas e proprietários ativos), com WhatsApp, corridas no mesmo dia e carros de que é dono |
+| POST | `/api/transfers/:id/offer` | operacao | Define ou aumenta o valor para o motorista (`offer_cents`); não diminui. Só em aguardando_motorista |
+| POST | `/api/transfers/:id/notify` | operacao | Registra no histórico que o motorista foi chamado no WhatsApp (`driver_partner_id`) |
+| POST | `/api/transfers/:id/accept` | operacao | Marca quem aceitou (`driver_partner_id`, `offer_cents` opcional, `vehicle_id` opcional); exige valor |
+| POST | `/api/transfers/:id/release` | operacao | Motorista desistiu: volta para aguardando, sem penalidade |
+| PATCH | `/api/transfers/:id/paid` | operacao | `{paid}` marca ou desmarca o pagamento do cliente |
+| POST | `/api/transfers/:id/start`, `/complete` | operacao | Inicia; conclui (`extra_wait_cents`, exige pagamento) e gera os pagamentos a parceiros |
+| POST | `/api/transfers/:id/cancel` | operacao | `{flight_cancelled}`; multa de 50% dentro de 24h (RN-02.10). Só antes de iniciar |
+| GET | `/api/audit?user_id=&denied=true&limit=` | auditoria | Trilha de auditoria, mais recente primeiro (padrão 100, máximo 500); `denied=true` só os acessos negados |
+| GET | `/api/dashboard?month=AAAA-MM` | operacao | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
+
+Permissões (RN-05.10, `internal/pkg/authz`): `operacao` (admin, central), `clientes.anonimizar`, `termos.publicar`, `usuarios` e `auditoria` (admin), `contratos` (admin, legal_reviewer). Sem a permissão: 403 "acesso negado para este perfil". O papel vale pelo banco a cada requisição: usuário desativado recebe 401 na hora (RN-05.8).
 
 Erros de reserva: 400 validação, 404 não encontrado, 409 conflito (período ocupado, manutenção, conferência pendente, etapa final ou já alterada, veículo aguardando o checklist de outra reserva ou ainda em locação em outra); 400 também para hora no futuro e devolução antes da entrega.
 
@@ -150,6 +155,10 @@ users
   active BOOL DEFAULT true              -- V8: desativado não entra
   created_at, updated_at TIMESTAMPTZ
   UNIQUE INDEX lower(email)
+
+audit_log                               -- V22, só inclusão (trigger), RN-05.9
+  id UUID PK, user_id FK users, role, method, route, path TEXT, status INT, created_at TIMESTAMPTZ
+  -- escritas (inclusive o login) e acessos negados; sem corpo nem query string
 
 schema_migrations (version TEXT PK, applied_at)
 ```

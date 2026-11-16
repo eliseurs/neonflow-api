@@ -83,6 +83,7 @@ func TestLogin_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "tok-u1-central", res.Token)
 	assert.Equal(t, "u1", res.User.ID)
+	assert.Equal(t, []string{"operacao"}, res.User.Permissions, "o login já devolve o que o papel pode abrir (RN-05.10)")
 }
 
 func TestLogin_SameErrorForUnknownEmailAndWrongPassword(t *testing.T) {
@@ -120,6 +121,7 @@ func TestMe(t *testing.T) {
 	u, err := svc.Me(context.Background(), "u1")
 	require.NoError(t, err)
 	assert.Equal(t, "Central", u.Name)
+	assert.Equal(t, []string{"operacao"}, u.Permissions)
 
 	_, err = svc.Me(context.Background(), " ")
 	assert.ErrorIs(t, err, authentication.ErrUserNotFound)

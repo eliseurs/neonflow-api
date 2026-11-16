@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
+	"neonflow-api/internal/pkg/authz"
 	"neonflow-api/internal/pkg/security"
 )
 
@@ -19,6 +21,23 @@ func (fakeParser) Parse(token string) (security.Claims, error) {
 		return security.Claims{UserID: "u1", Role: "central"}, nil
 	}
 	return security.Claims{}, errors.New("bad")
+}
+
+type fakeAccounts struct {
+	role string
+	err  error
+}
+
+func (f fakeAccounts) ActiveRole(context.Context, string) (string, error) { return f.role, f.err }
+
+type fakeRecorder struct {
+	entries []AuditEntry
+	err     error
+}
+
+func (f *fakeRecorder) Record(_ context.Context, e AuditEntry) error {
+	f.entries = append(f.entries, e)
+	return f.err
 }
 
 func init() { gin.SetMode(gin.TestMode) }
@@ -35,7 +54,7 @@ func serve(r *gin.Engine, method, path string, headers map[string]string) *httpt
 
 func TestAuthMiddleware(t *testing.T) {
 	r := gin.New()
-	r.GET("/x", AuthMiddleware(fakeParser{}), func(c *gin.Context) {
+	r.GET("/x", AuthMiddleware(fakeParser{}, nil), func(c *gin.Context) {
 		c.String(http.StatusOK, c.GetString("userID")+":"+c.GetString("role"))
 	})
 
@@ -63,15 +82,70 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 }
 
-func TestRoleGuard(t *testing.T) {
+// O papel e a situação valem pelo banco, não pelo que o token diz (RN-05.8).
+func TestAuthMiddleware_Accounts(t *testing.T) {
+	route := func(a Accounts) *gin.Engine {
+		r := gin.New()
+		r.GET("/x", AuthMiddleware(fakeParser{}, a), func(c *gin.Context) { c.String(http.StatusOK, c.GetString("role")) })
+		return r
+	}
+	h := map[string]string{"Authorization": "Bearer ok"}
+
+	w := serve(route(fakeAccounts{role: "admin"}), http.MethodGet, "/x", h)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "admin", w.Body.String(), "papel trocado vale sem novo login")
+
+	w = serve(route(fakeAccounts{err: ErrAccountNotFound}), http.MethodGet, "/x", h)
+	assert.Equal(t, http.StatusUnauthorized, w.Code, "desativado perde o acesso na hora")
+	assert.Contains(t, w.Body.String(), "sessão encerrada")
+
+	w = serve(route(fakeAccounts{err: errors.New("db")}), http.MethodGet, "/x", h)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestRequire(t *testing.T) {
 	r := gin.New()
 	setRole := func(role string) gin.HandlerFunc { return func(c *gin.Context) { c.Set("role", role) } }
 	ok := func(c *gin.Context) { c.Status(http.StatusOK) }
-	r.GET("/admin", setRole("admin"), RoleGuard("admin"), ok)
-	r.GET("/central", setRole("central"), RoleGuard("admin"), ok)
+	r.GET("/admin", setRole("admin"), Require(authz.Users), ok)
+	r.GET("/central", setRole("central"), Require(authz.Users), ok)
+	r.GET("/sem-papel", Require(authz.Operation), ok)
 
 	assert.Equal(t, http.StatusOK, serve(r, http.MethodGet, "/admin", nil).Code)
 	assert.Equal(t, http.StatusForbidden, serve(r, http.MethodGet, "/central", nil).Code)
+	assert.Equal(t, http.StatusForbidden, serve(r, http.MethodGet, "/sem-papel", nil).Code)
+}
+
+func TestAudit(t *testing.T) {
+	rec := &fakeRecorder{}
+	var failed error
+	r := gin.New()
+	r.Use(Audit(rec, func(err error) { failed = err }))
+	as := func(role string) gin.HandlerFunc {
+		return func(c *gin.Context) { c.Set("userID", "u1"); c.Set("role", role) }
+	}
+	ok := func(c *gin.Context) { c.Status(http.StatusOK) }
+	r.GET("/bookings", as("central"), ok)
+	r.POST("/bookings/:id/cancel", as("central"), ok)
+	r.GET("/users", as("central"), Require(authz.Users), ok)
+	r.POST("/public", ok)
+
+	serve(r, http.MethodGet, "/bookings", nil)
+	serve(r, http.MethodPost, "/public", nil)
+	assert.Empty(t, rec.entries, "leitura permitida e chamada sem usuário não entram")
+
+	serve(r, http.MethodPost, "/bookings/b1/cancel?motivo=x", nil)
+	serve(r, http.MethodGet, "/users", nil)
+	assert.Equal(t, []AuditEntry{
+		{UserID: "u1", Role: "central", Method: "POST", Route: "/bookings/:id/cancel", Path: "/bookings/b1/cancel", Status: http.StatusOK},
+		{UserID: "u1", Role: "central", Method: "GET", Route: "/users", Path: "/users", Status: http.StatusForbidden},
+	}, rec.entries, "escrita e acesso negado entram, sem query string")
+	assert.NoError(t, failed)
+
+	rec.err = errors.New("db")
+	w := serve(r, http.MethodPost, "/bookings/b1/cancel", nil)
+	assert.Equal(t, http.StatusOK, w.Code, "falha na auditoria não derruba a resposta")
+	assert.EqualError(t, failed, "db")
 }
 
 func TestCORS(t *testing.T) {

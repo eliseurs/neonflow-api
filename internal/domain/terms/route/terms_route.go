@@ -1,11 +1,11 @@
 package route
 
 import (
-	"neonflow-api/internal/domain/authentication"
 	"neonflow-api/internal/domain/terms/handler"
 	"neonflow-api/internal/domain/terms/repository"
 	"neonflow-api/internal/domain/terms/service"
 	"neonflow-api/internal/infra/api"
+	"neonflow-api/internal/pkg/authz"
 )
 
 // Register expõe os termos: o admin publica, a central gera o link, o cliente aceita sem login (RN-02.3).
@@ -14,12 +14,12 @@ func Register(app *api.App) {
 	svc := service.NewTermsService(repo)
 	h := handler.NewTermsHandler(svc, app.Logger())
 
-	g := app.API(api.Routes{Authorization: true, Roles: []string{authentication.RoleAdmin, authentication.RoleCentral}})
+	g := app.API(api.Routes{Authorization: true, Permission: authz.Operation})
 	g.GET("/terms", h.Versions)
 	g.POST("/bookings/:id/terms-link", h.CreateLink)
 	g.GET("/bookings/:id/terms", h.BookingAcceptance)
 
-	admin := app.API(api.Routes{Authorization: true, Roles: []string{authentication.RoleAdmin}})
+	admin := app.API(api.Routes{Authorization: true, Permission: authz.TermsPublish})
 	admin.POST("/terms", h.Publish)
 
 	// Sem login: o código do link é a autorização (32 bytes aleatórios, só o hash no banco, 7 dias).

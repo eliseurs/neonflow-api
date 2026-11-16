@@ -1,11 +1,11 @@
 package route
 
 import (
-	"neonflow-api/internal/domain/authentication"
 	"neonflow-api/internal/domain/contract/handler"
 	"neonflow-api/internal/domain/contract/repository"
 	"neonflow-api/internal/domain/contract/service"
 	"neonflow-api/internal/infra/api"
+	"neonflow-api/internal/pkg/authz"
 )
 
 // Register expõe os contratos e a revisão jurídica. Só admin e revisora entram; a central não.
@@ -15,7 +15,7 @@ func Register(app *api.App) {
 	svc := service.NewContractService(repo)
 	h := handler.NewContractHandler(svc, app.Logger())
 
-	g := app.API(api.Routes{Authorization: true, Roles: []string{authentication.RoleAdmin, authentication.RoleLegalReviewer}})
+	g := app.API(api.Routes{Authorization: true, Permission: authz.Contracts})
 	g.GET("/contracts", h.Documents)
 	g.GET("/contracts/:code/versions", h.Versions)
 	g.POST("/contracts/:code/versions", h.CreateVersion)

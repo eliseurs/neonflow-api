@@ -4,24 +4,28 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+
+	"neonflow-api/internal/pkg/authz"
 )
 
 const (
-	RoleAdmin   = "admin"
-	RoleCentral = "central"
+	RoleAdmin   = authz.RoleAdmin
+	RoleCentral = authz.RoleCentral
 	// RoleLegalReviewer é a revisora jurídica dos contratos (06_GUIA_AREA_JURIDICA, pacote V15). Não acessa a operação.
-	RoleLegalReviewer = "legal_reviewer"
+	RoleLegalReviewer = authz.RoleLegalReviewer
 
 	MinPasswordLength = 10
 )
 
 type User struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
+	// Permissions é o que o papel pode abrir (RN-05.10); o app monta o menu e as telas por esta lista.
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Credentials é o usuário com o hash da senha. Nunca sai da API.
@@ -61,7 +65,7 @@ func NormalizeEmail(email string) string {
 }
 
 func ValidRole(role string) bool {
-	return role == RoleAdmin || role == RoleCentral || role == RoleLegalReviewer
+	return authz.ValidRole(role)
 }
 
 // Validate normaliza e valida o pedido de criação de usuário.

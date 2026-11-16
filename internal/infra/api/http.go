@@ -30,12 +30,15 @@ type App struct {
 	router  *gin.Engine
 	configs config.Configs
 	tokens  *security.TokenProvider
+	// Sem banco (testes de rota), o papel vem só do token e nada é auditado.
+	accounts middleware.Accounts
+	audit    middleware.AuditRecorder
 }
 
-// Routes descreve as proteções de um grupo de rotas em /api.
+// Routes descreve as proteções de um grupo de rotas em /api. Permission é uma das permissões de authz.
 type Routes struct {
 	Authorization bool
-	Roles         []string
+	Permission    string
 }
 
 func New(configs config.Configs, database *sql.DB, logger *slog.Logger) *App {
@@ -50,6 +53,8 @@ func New(configs config.Configs, database *sql.DB, logger *slog.Logger) *App {
 	}
 	if database != nil {
 		app.pinger = database
+		app.accounts = store{db: database}
+		app.audit = store{db: database}
 	}
 	return app
 }
@@ -59,6 +64,9 @@ func (h *App) Setup() *gin.Engine {
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(h.log))
 	router.Use(middleware.CORS(h.configs.AllowedOrigins))
+	if h.audit != nil {
+		router.Use(middleware.Audit(h.audit, func(err error) { h.log.Error("audit record failed", "error", err) }))
+	}
 	h.router = router
 	return router
 }
@@ -70,14 +78,14 @@ func (h *App) Router() *gin.Engine {
 	return h.router
 }
 
-// API devolve um grupo /api com autenticação e papéis conforme Routes.
+// API devolve um grupo /api com autenticação e permissão conforme Routes.
 func (h *App) API(r Routes) *gin.RouterGroup {
 	group := h.Router().Group("/api")
 	if r.Authorization {
-		group.Use(middleware.AuthMiddleware(h.tokens))
+		group.Use(middleware.AuthMiddleware(h.tokens, h.accounts))
 	}
-	if len(r.Roles) > 0 {
-		group.Use(middleware.RoleGuard(r.Roles...))
+	if r.Permission != "" {
+		group.Use(middleware.Require(r.Permission))
 	}
 	return group
 }

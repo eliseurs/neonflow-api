@@ -37,6 +37,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		api.RespondError(c, http.StatusInternalServerError, "erro interno")
 		return
 	}
+	// Identifica quem entrou para a auditoria da rota (RN-05.9).
+	c.Set("userID", res.User.ID)
+	c.Set("role", res.User.Role)
 	api.Respond(c, http.StatusOK, res)
 }
 
