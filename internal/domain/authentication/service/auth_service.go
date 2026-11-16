@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"neonflow-api/internal/domain/authentication"
+	"neonflow-api/internal/pkg/authz"
 )
 
 type AuthService struct {
@@ -48,6 +49,7 @@ func (s *AuthService) Login(ctx context.Context, req authentication.LoginRequest
 	if err != nil {
 		return authentication.LoginResponse{}, err
 	}
+	creds.Permissions = authz.Permissions(creds.Role)
 	return authentication.LoginResponse{Token: token, ExpiresAt: expiresAt, User: creds.User}, nil
 }
 
@@ -55,7 +57,12 @@ func (s *AuthService) Me(ctx context.Context, userID string) (authentication.Use
 	if strings.TrimSpace(userID) == "" {
 		return authentication.User{}, authentication.ErrUserNotFound
 	}
-	return s.repo.FindByID(ctx, userID)
+	u, err := s.repo.FindByID(ctx, userID)
+	if err != nil {
+		return authentication.User{}, err
+	}
+	u.Permissions = authz.Permissions(u.Role)
+	return u, nil
 }
 
 // CreateUser é usado pela CLI create-admin; não há cadastro aberto (RN-05.2).

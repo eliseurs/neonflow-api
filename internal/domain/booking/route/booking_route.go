@@ -1,11 +1,11 @@
 package route
 
 import (
-	"neonflow-api/internal/domain/authentication"
 	"neonflow-api/internal/domain/booking/handler"
 	"neonflow-api/internal/domain/booking/repository"
 	"neonflow-api/internal/domain/booking/service"
 	"neonflow-api/internal/infra/api"
+	"neonflow-api/internal/pkg/authz"
 )
 
 // Register expõe as reservas para a central. Autosserviço do cliente está fora do escopo.
@@ -14,7 +14,7 @@ func Register(app *api.App) {
 	svc := service.NewBookingService(repo)
 	h := handler.NewBookingHandler(svc, app.Logger())
 
-	g := app.API(api.Routes{Authorization: true, Roles: []string{authentication.RoleAdmin, authentication.RoleCentral}})
+	g := app.API(api.Routes{Authorization: true, Permission: authz.Operation})
 	g.GET("/availability", h.Available)
 	g.GET("/bookings", h.List)
 	g.GET("/bookings/:id", h.Get)

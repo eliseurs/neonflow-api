@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"neonflow-api/internal/config"
+	"neonflow-api/internal/pkg/authz"
+	"neonflow-api/internal/pkg/middleware"
 )
 
 type fakePinger struct{ err error }
@@ -62,7 +64,7 @@ func TestAPI_RouteGroups(t *testing.T) {
 	ok := func(c *gin.Context) { Respond(c, http.StatusOK, gin.H{"user": c.GetString("userID")}) }
 	app.API(Routes{}).GET("/public", ok)
 	app.API(Routes{Authorization: true}).GET("/private", ok)
-	app.API(Routes{Authorization: true, Roles: []string{"admin"}}).GET("/admin", ok)
+	app.API(Routes{Authorization: true, Permission: authz.Users}).GET("/admin", ok)
 
 	assert.Equal(t, http.StatusOK, get(app, "/api/public", nil).Code)
 	assert.Equal(t, http.StatusUnauthorized, get(app, "/api/private", nil).Code)
@@ -76,6 +78,46 @@ func TestAPI_RouteGroups(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, get(app, "/api/admin", h).Code)
 
 	assert.Equal(t, http.StatusNotFound, get(app, "/nao-existe", nil).Code)
+}
+
+type fakeStore struct {
+	role    string
+	entries []middleware.AuditEntry
+}
+
+func (f *fakeStore) ActiveRole(context.Context, string) (string, error) {
+	if f.role == "" {
+		return "", middleware.ErrAccountNotFound
+	}
+	return f.role, nil
+}
+
+func (f *fakeStore) Record(_ context.Context, e middleware.AuditEntry) error {
+	f.entries = append(f.entries, e)
+	return nil
+}
+
+// Com banco, o papel vem do usuário atual e as rotas são auditadas (RN-05.8, RN-05.9).
+func TestAPI_AccountsAndAudit(t *testing.T) {
+	app := newTestApp(t)
+	st := &fakeStore{role: "central"}
+	app.accounts, app.audit = st, st
+	ok := func(c *gin.Context) { Respond(c, http.StatusOK, gin.H{"role": c.GetString("role")}) }
+	app.API(Routes{Authorization: true, Permission: authz.Users}).GET("/admin", ok)
+
+	// O token ainda diz admin, mas o usuário foi rebaixado para central.
+	token, _, err := app.Tokens().Generate("u1", "admin")
+	require.NoError(t, err)
+	h := http.Header{"Authorization": {"Bearer " + token}}
+	assert.Equal(t, http.StatusForbidden, get(app, "/api/admin", h).Code)
+	assert.Equal(t, []middleware.AuditEntry{{UserID: "u1", Role: "central", Method: "GET", Route: "/api/admin", Path: "/api/admin", Status: http.StatusForbidden}}, st.entries)
+
+	st.role = "admin"
+	assert.Equal(t, http.StatusOK, get(app, "/api/admin", h).Code)
+
+	st.role = ""
+	assert.Equal(t, http.StatusUnauthorized, get(app, "/api/admin", h).Code, "usuário desativado")
+	assert.Len(t, st.entries, 1)
 }
 
 func TestRespondError(t *testing.T) {

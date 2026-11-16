@@ -8,6 +8,16 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-16] — Permissões, papel do banco e auditoria das rotas (RN-05.8 a 05.10)
+
+- **Matriz de acesso** em `internal/pkg/authz`: papel → permissões (`operacao`, `contratos`, `clientes.anonimizar`, `termos.publicar`, `usuarios`, `auditoria`). `api.Routes` troca `Roles` por `Permission`, e `middleware.Require(permissão)` substitui o `RoleGuard`. Cada papel continua com o mesmo acesso de antes.
+- **Papel do banco:** `AuthMiddleware` recebe `Accounts` e lê `role` de quem está `active` a cada requisição. Desativado → 401 na hora; papel trocado vale sem novo login. Sem banco (testes de rota) vale o papel do token.
+- **Auditoria:** middleware `Audit` no router grava em `audit_log` (V22, só inclusão por trigger) as escritas de usuário identificado, o login (o handler identifica o usuário) e os 403. Sem corpo nem query string; falha ao gravar vai para o log e não muda a resposta. `GET /api/audit` (permissão `auditoria`) lista com filtros de usuário, negados e limite.
+- `user.permissions` no login e no `/auth/me`, para o app montar menu, telas e layout por perfil.
+- Testes: `authz`, middlewares (papel do banco, permissão, auditoria), `api` (rebaixado perde acesso, auditoria do 403), domínio `audit` e integração de `store` e do repository. Cobertura de `internal/` com integração: 95,5%.
+
+---
+
 ## [2026-11-11] — Pedidos do fundador (sete pacotes) nas pendências
 
 - O `pendencias.md` da raiz (texto do fundador com sete pacotes de evolução) foi mesclado em `docs/pendencias.md`, que volta a ser o único arquivo: seção "Pedidos do fundador de 11/11/2026", com cada pedido confrontado com o que existe na API e no app, e o texto original no fim.

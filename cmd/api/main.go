@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"neonflow-api/internal/config"
+	auditRoute "neonflow-api/internal/domain/audit/route"
 	authRoute "neonflow-api/internal/domain/authentication/route"
 	bookingRoute "neonflow-api/internal/domain/booking/route"
 	checklistRoute "neonflow-api/internal/domain/checklist/route"
@@ -68,6 +69,7 @@ func main() {
 	termsRoute.Register(app)
 	maintenanceRoute.Register(app)
 	contractRoute.Register(app)
+	auditRoute.Register(app)
 
 	app.Server()
 }
