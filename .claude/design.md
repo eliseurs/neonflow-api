@@ -46,6 +46,7 @@ internal/
     terms/                  # termos em versões, link de aceite e aceite público do cliente (RN-02.3)
     contract/               # os seis contratos em versões com hash e a revisão jurídica append-only (RN-08, ADR-0015)
     audit/                  # consulta da trilha de auditoria das rotas (RN-05.9)
+    siterequest/            # pedidos do site (aluguel e transfer) do cliente logado; a central confirma, recusa ou pede ajuste (RN-02.33 a 02.37)
     account/                # contas de parceiro (convite) e cliente (cadastro no site), confirmação do e-mail e nova senha (RN-05.11 a 05.14)
   infra/
     api/                    # App (Gin), Routes, Respond, healthcheck, graceful shutdown; store (papel atual e gravação da auditoria)
@@ -141,6 +142,13 @@ Plano do ciclo de reserva: `docs/plano-reserva-persistente.md`.
 | PATCH | `/api/transfers/:id/paid` | operacao | `{paid}` marca ou desmarca o pagamento do cliente |
 | POST | `/api/transfers/:id/start`, `/complete` | operacao | Inicia; conclui (`extra_wait_cents`, exige pagamento) e gera os pagamentos a parceiros |
 | POST | `/api/transfers/:id/cancel` | operacao | `{flight_cancelled}`; multa de 50% dentro de 24h (RN-02.10). Só antes de iniciar |
+| GET | `/api/client/cars?start_at=&end_at=` | area.cliente | Carros livres no período com a estimativa: `days`, `daily_rate_cents`, `total_cents`, caução e km (RN-02.34). Sem placa nem dono |
+| GET, POST | `/api/client/requests` | area.cliente | Pedidos do próprio cliente; POST `{kind: aluguel\|transfer, whatsapp, notes, referral_code}` mais, no aluguel, `vehicle_id`, `start_at`, `end_at`, `place`, `km_plan`, e no transfer `origin`, `destination`, `pickup_at`, `passengers`, `flight`. Não bloqueia o carro; período já reservado → 409 |
+| GET, PUT | `/api/client/requests/:id` | area.cliente | Pedido com o histórico (`events`); PUT reenvia o pedido em ajuste (mesmo corpo do POST). Pedido de outro cliente → 404 |
+| POST | `/api/client/requests/:id/cancel` | area.cliente | Cancela o pedido solicitado ou em ajuste |
+| GET | `/api/requests?status=`, `/api/requests/:id` | operacao | Pedidos do site (`solicitado`, `ajuste_pedido`, `confirmado`, `recusado`, `cancelado`), com cliente, e-mail e WhatsApp |
+| POST | `/api/requests/:id/confirm` | operacao | Confirma: no aluguel cria a reserva em preparação (bloqueia, 24h para pagar); no transfer exige `price_cents` e cria o transfer. 409 se o período foi ocupado (o pedido volta a solicitado) ou se o valor do carro mudou. E-mail ao cliente |
+| POST | `/api/requests/:id/adjust`, `/api/requests/:id/refuse` | operacao | `{note}` obrigatório; e-mail ao cliente |
 | GET | `/api/audit?user_id=&denied=true&limit=` | auditoria | Trilha de auditoria, mais recente primeiro (padrão 100, máximo 500); `denied=true` só os acessos negados |
 | GET | `/api/dashboard?month=AAAA-MM` | operacao | Faturamento do mês por retirada (diárias + atraso + km, confirmadas em diante) e pago no mês (`paid_at`, diárias, sem canceladas); ocupação de agora (carros em locação ÷ frota). Mês vazio = atual em Gramado |
 
@@ -168,6 +176,14 @@ users
 audit_log                               -- V22, só inclusão (trigger), RN-05.9
   id UUID PK, user_id FK users, role, method, route, path TEXT, status INT, created_at TIMESTAMPTZ
   -- escritas (inclusive o login) e acessos negados; sem corpo nem query string
+
+site_requests (V24)                     -- pedidos do site, RN-02.33 a 02.37; não bloqueiam o carro
+  id, kind CHECK (aluguel|transfer), status CHECK (solicitado|ajuste_pedido|confirmado|recusado|cancelado)
+  customer_id FK, user_id FK (a conta que pediu), whatsapp (dígitos), notes, referred_by_partner_id FK NULL
+  vehicle_id, start_at, end_at, place, km_plan, days, daily_rate_cents, total_cents, deposit_cents, km_limit_per_day, extra_km_cents   -- aluguel e estimativa
+  origin, destination, pickup_at, passengers, flight                                                              -- transfer
+  central_note, booking_id FK NULL, transfer_id FK NULL, created_at, updated_at
+site_request_events (V24): id, request_id FK, from_status, to_status, note, user_id FK, created_at
 
 account_tokens                          -- V23, links de uso único enviados por e-mail (RN-05.14)
   id, purpose CHECK (verificar_email|convite|nova_senha), token_hash UNIQUE (só o hash)

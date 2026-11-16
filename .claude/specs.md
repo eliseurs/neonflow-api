@@ -8,6 +8,21 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-16] — Pedidos do site: o cliente pede, a central responde (RN-02.33 a 02.37)
+
+Decisões do fundador no CLI: só cliente com conta pede; o pedido bloqueia só quando a central confirma (resolve PEN-73); retorno por e-mail, Minha conta e botão de WhatsApp na central (resolve PEN-77); aluguel e transfer; o cliente vê a estimativa; no ajuste, o cliente edita e reenvia.
+
+- `V24_pedidos_do_site`: `site_requests` (aluguel com a estimativa gravada; transfer sem preço) e `site_request_events` (histórico com a mensagem da central). Down testado.
+- Domínio `siterequest`: carros livres com estimativa (`QuoteFor`, mesmo cálculo da reserva), criar, listar, ver, reenviar e cancelar (cliente, `area.cliente`, só os próprios pedidos); listar, ver, confirmar, pedir ajuste e recusar (central, `operacao`).
+- Confirmar usa os serviços de reserva e de transfer da central: a reserva nasce em preparação (bloqueia e abre as 24 horas). O pedido fica reservado durante a criação (`Claim`) para dois cliques não confirmarem duas vezes; se a reserva falhar (período ocupado), volta a solicitado. Diária, caução ou km diferentes do pedido → 409, a central pede ajuste.
+- E-mail ao cliente na confirmação, no ajuste e na recusa, com o link de Minha conta; a falha vai para o log e não desfaz a resposta.
+- Código de indicação do pedido vira o parceiro ativo com aquele código.
+- Testes: entidade, serviço, handler, rota (403 cruzado entre cliente e central) e integração, inclusive a confirmação de ponta a ponta com os serviços reais. Smoke com a API rodando. Cobertura de `internal/`: 95,2%.
+- Regras: RN-02.33 a RN-02.37; RN-01.9 revista para o cliente logado; PEN-73 e PEN-77 resolvidas; pacote 2 com a API pronta.
+- Falta no app: pedir logado (carro e período com a estimativa, ou transfer), Minha conta com os pedidos e o reenvio, e a tela da central com confirmar, recusar, pedir ajuste e avisar no WhatsApp.
+
+---
+
 ## [2026-11-16] — Login de parceiros e clientes (RN-05.11 a 05.14)
 
 Decisão do fundador no CLI: parceiros de qualquer tipo e clientes entram na aplicação (RN-05.6 revista); o cliente se cadastra sozinho, com o e-mail confirmado pelo Resend; a senha esquecida volta por e-mail; no transfer, oferta aberta (PEN-74, ainda não implementada). Este PR é a base de login; as áreas do parceiro e do cliente vêm nos próximos.

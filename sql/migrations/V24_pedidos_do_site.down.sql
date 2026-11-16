@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS site_request_events CASCADE;
+DROP TABLE IF EXISTS site_requests CASCADE;
