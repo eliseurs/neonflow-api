@@ -8,6 +8,19 @@ Plano: `docs/plano-reserva-persistente.md`. Núcleo implementado na API em 05/11
 
 ---
 
+## [2026-11-16] — Pedido na página do carro, sem conta (RN-02.38)
+
+Decisões do fundador no CLI: o cliente vem pela página do carro, como na LuxuryBus; só o contato, e a conta nasce sozinha; o valor aparece no formulário ao escolher as datas; o formulário do WhatsApp continua ao lado.
+
+- `V25_pedido_sem_conta`: situação `aguardando_email` no pedido e `customer_id` nulo só nela. Down testado.
+- `GET /api/public/fleet/:id/quote` (orçamento e se o carro está livre) e `POST /api/public/requests` (pedido com nome, e-mail e WhatsApp): a conta de cliente do e-mail é usada ou criada sem senha (`password_hash` vazio não confere com nenhuma senha) e sem confirmar; o pedido fica invisível para a central; o e-mail "Confirme o seu pedido" leva o resumo, o valor e o link `/conta/confirmar/:token`.
+- `POST /api/public/accounts/confirm` agora manda à central os pedidos `aguardando_email` da conta, já ligados ao cadastro (o da central com o mesmo e-mail, se houver), e devolve `requests_sent` e, para conta sem senha, `password_token` (link de nova senha de 1 hora) para o cliente criar a senha na mesma tela.
+- E-mail de parceiro, da equipe ou de conta desativada → 409. A lista da central não mostra `aguardando_email`.
+- Testes: entidade, serviço, handler e integração (pedido invisível até o clique, ligação ao cadastro da central, conta com senha, CHECK do banco). Smoke com a API rodando e Resend falso. Cobertura de `internal/`: 95,0%.
+- Regras: RN-02.38; RN-02.33, RN-01.9 e RN-05.13 revistas; PEN-79 com a rota nova.
+
+---
+
 ## [2026-11-16] — Oferta aberta do transfer (PEN-74)
 
 Decisões do fundador no CLI: a oferta mostra tudo, inclusive o nome do cliente; o motorista desiste pelo próprio app; sem aviso automático por enquanto (a central avisa pelo WhatsApp e a oferta aparece na área do motorista).

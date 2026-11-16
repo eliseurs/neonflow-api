@@ -25,6 +25,7 @@ type fakeRepo struct {
 	partnerEr error
 
 	confirmed, reset, accepted string
+	confirmation               account.Confirmed
 	passwordHash               string
 	linkErr                    error
 }
@@ -46,9 +47,9 @@ func (f *fakeRepo) SaveToken(_ context.Context, t account.Token) error {
 	return f.tokenErr
 }
 
-func (f *fakeRepo) ConfirmEmail(_ context.Context, hash string) error {
+func (f *fakeRepo) ConfirmEmail(_ context.Context, hash string) (account.Confirmed, error) {
 	f.confirmed = hash
-	return f.linkErr
+	return f.confirmation, f.linkErr
 }
 
 func (f *fakeRepo) ResetPassword(_ context.Context, hash, pw string) error {
@@ -175,14 +176,36 @@ func TestSignup_Errors(t *testing.T) {
 }
 
 func TestConfirmEmail(t *testing.T) {
-	repo := &fakeRepo{}
+	repo := &fakeRepo{confirmation: account.Confirmed{UserID: "u1", HasPassword: true, RequestsSent: 1}}
 	svc, _ := newSvc(repo, &fakeMail{})
-	require.NoError(t, svc.ConfirmEmail(context.Background(), account.TokenRequest{Token: "abc"}))
+	c, err := svc.ConfirmEmail(context.Background(), account.TokenRequest{Token: "abc"})
+	require.NoError(t, err)
 	assert.Equal(t, account.HashToken("abc"), repo.confirmed)
+	assert.Equal(t, account.Confirmation{Confirmed: true, RequestsSent: 1}, c, "com senha, nenhum link de senha")
+	assert.Empty(t, repo.tokens)
 
-	assert.ErrorIs(t, svc.ConfirmEmail(context.Background(), account.TokenRequest{}), account.ErrInvalidToken)
+	_, err = svc.ConfirmEmail(context.Background(), account.TokenRequest{})
+	assert.ErrorIs(t, err, account.ErrInvalidToken)
 	svc, _ = newSvc(&fakeRepo{linkErr: account.ErrInvalidToken}, &fakeMail{})
-	assert.ErrorIs(t, svc.ConfirmEmail(context.Background(), account.TokenRequest{Token: "abc"}), account.ErrInvalidToken)
+	_, err = svc.ConfirmEmail(context.Background(), account.TokenRequest{Token: "abc"})
+	assert.ErrorIs(t, err, account.ErrInvalidToken)
+}
+
+func TestConfirmEmail_WithoutPassword(t *testing.T) {
+	// Conta nascida do pedido na página do carro: recebe o link para criar a senha ali mesmo (RN-02.38).
+	repo := &fakeRepo{confirmation: account.Confirmed{UserID: "u7", RequestsSent: 1}}
+	svc, _ := newSvc(repo, &fakeMail{})
+	c, err := svc.ConfirmEmail(context.Background(), account.TokenRequest{Token: "abc"})
+	require.NoError(t, err)
+	require.Len(t, repo.tokens, 1)
+	assert.Equal(t, account.PurposeResetPassword, repo.tokens[0].Purpose)
+	assert.Equal(t, "u7", repo.tokens[0].UserID)
+	assert.Equal(t, repo.tokens[0].Hash, account.HashToken(c.PasswordToken))
+
+	boom := errors.New("db")
+	svc, _ = newSvc(&fakeRepo{confirmation: account.Confirmed{UserID: "u7"}, tokenErr: boom}, &fakeMail{})
+	_, err = svc.ConfirmEmail(context.Background(), account.TokenRequest{Token: "abc"})
+	assert.ErrorIs(t, err, boom)
 }
 
 func TestForgotPassword(t *testing.T) {

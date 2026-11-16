@@ -16,6 +16,12 @@ import (
 	"neonflow-api/internal/testutil"
 )
 
+// confirmErr é a confirmação quando o teste só olha o erro.
+func confirmErr(repo *AccountRepository, tokenHash string) error {
+	_, err := repo.ConfirmEmail(context.Background(), tokenHash)
+	return err
+}
+
 func saveToken(t *testing.T, repo *AccountRepository, tok account.Token) string {
 	t.Helper()
 	token, hash, err := account.NewToken()
@@ -53,25 +59,25 @@ func TestAccountRepository_CustomerSignup(t *testing.T) {
 
 	// Link vencido e link de outra finalidade não confirmam.
 	expired := saveToken(t, repo, account.Token{Purpose: account.PurposeConfirmEmail, UserID: ana.ID, ExpiresAt: time.Now().Add(-time.Minute)})
-	assert.ErrorIs(t, repo.ConfirmEmail(ctx, account.HashToken(expired)), account.ErrInvalidToken)
+	assert.ErrorIs(t, confirmErr(repo, account.HashToken(expired)), account.ErrInvalidToken)
 	reset := saveToken(t, repo, account.Token{Purpose: account.PurposeResetPassword, UserID: ana.ID})
-	assert.ErrorIs(t, repo.ConfirmEmail(ctx, account.HashToken(reset)), account.ErrInvalidToken)
+	assert.ErrorIs(t, confirmErr(repo, account.HashToken(reset)), account.ErrInvalidToken)
 
 	// Confirmar liga a conta ao cadastro da central com o mesmo e-mail.
 	confirm := saveToken(t, repo, account.Token{Purpose: account.PurposeConfirmEmail, UserID: ana.ID})
-	require.NoError(t, repo.ConfirmEmail(ctx, account.HashToken(confirm)))
+	require.NoError(t, confirmErr(repo, account.HashToken(confirm)))
 	var customerID sql.NullString
 	var verified bool
 	require.NoError(t, database.QueryRowContext(ctx, `SELECT customer_id, email_verified_at IS NOT NULL FROM users WHERE id = $1`, ana.ID).Scan(&customerID, &verified))
 	assert.True(t, verified)
 	assert.Equal(t, existing, customerID.String)
-	assert.ErrorIs(t, repo.ConfirmEmail(ctx, account.HashToken(confirm)), account.ErrInvalidToken, "o link vale uma vez")
+	assert.ErrorIs(t, confirmErr(repo, account.HashToken(confirm)), account.ErrInvalidToken, "o link vale uma vez")
 
 	// Sem cadastro com o e-mail: cria um com o nome e o e-mail da conta.
 	bia, err := repo.CreateCustomerAccount(ctx, account.NewCustomerAccount{Name: "Bia Teste", Email: "bia@neonflow.test", PasswordHash: "h2"})
 	require.NoError(t, err)
 	confirm = saveToken(t, repo, account.Token{Purpose: account.PurposeConfirmEmail, UserID: bia.ID})
-	require.NoError(t, repo.ConfirmEmail(ctx, account.HashToken(confirm)))
+	require.NoError(t, confirmErr(repo, account.HashToken(confirm)))
 	var name, email string
 	require.NoError(t, database.QueryRowContext(ctx,
 		`SELECT c.name, c.email FROM users u JOIN customers c ON c.id = u.customer_id WHERE u.id = $1`, bia.ID).Scan(&name, &email))
@@ -86,7 +92,7 @@ func TestAccountRepository_CustomerSignup(t *testing.T) {
 	caio, err := repo.CreateCustomerAccount(ctx, account.NewCustomerAccount{Name: "Caio Teste", Email: "caio@neonflow.test", PasswordHash: "h3"})
 	require.NoError(t, err)
 	confirm = saveToken(t, repo, account.Token{Purpose: account.PurposeConfirmEmail, UserID: caio.ID})
-	require.NoError(t, repo.ConfirmEmail(ctx, account.HashToken(confirm)))
+	require.NoError(t, confirmErr(repo, account.HashToken(confirm)))
 	require.NoError(t, database.QueryRowContext(ctx,
 		`SELECT c.name FROM users u JOIN customers c ON c.id = u.customer_id WHERE u.id = $1`, caio.ID).Scan(&name))
 	assert.Equal(t, "Caio Teste", name)
@@ -180,7 +186,7 @@ func TestAccountRepository_PartnerInvite(t *testing.T) {
 
 	require.NoError(t, database.Close())
 	assert.Error(t, repo.AcceptInvite(ctx, account.HashToken(again), "h"))
-	assert.Error(t, repo.ConfirmEmail(ctx, "x"))
+	assert.Error(t, confirmErr(repo, "x"))
 	assert.Error(t, repo.ResetPassword(ctx, "x", "h"))
 	_, err = repo.FindAccount(ctx, "a@neonflow.test")
 	assert.Error(t, err)

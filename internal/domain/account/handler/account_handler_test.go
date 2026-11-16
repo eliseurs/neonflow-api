@@ -21,8 +21,10 @@ type fakeService struct {
 	partner string
 }
 
-func (f *fakeService) Signup(context.Context, account.SignupRequest) error          { return f.err }
-func (f *fakeService) ConfirmEmail(context.Context, account.TokenRequest) error     { return f.err }
+func (f *fakeService) Signup(context.Context, account.SignupRequest) error { return f.err }
+func (f *fakeService) ConfirmEmail(context.Context, account.TokenRequest) (account.Confirmation, error) {
+	return account.Confirmation{Confirmed: true, RequestsSent: 1, PasswordToken: "pw"}, f.err
+}
 func (f *fakeService) ForgotPassword(context.Context, account.EmailRequest) error   { return f.err }
 func (f *fakeService) ResetPassword(context.Context, account.PasswordRequest) error { return f.err }
 func (f *fakeService) AcceptInvite(context.Context, account.PasswordRequest) error  { return f.err }
@@ -59,7 +61,7 @@ func TestHandler_Success(t *testing.T) {
 		want       string
 	}{
 		{"/signup", `{"name":"Ana","email":"a@neonflow.test","password":"senha-forte-1"}`, http.StatusAccepted, "enviamos um link"},
-		{"/confirm", `{"token":"abc"}`, http.StatusOK, `"confirmed":true`},
+		{"/confirm", `{"token":"abc"}`, http.StatusOK, `"requests_sent":1,"password_token":"pw"`},
 		{"/forgot", `{"email":"a@neonflow.test"}`, http.StatusAccepted, "enviamos um link"},
 		{"/reset", `{"token":"abc","password":"senha-forte-1"}`, http.StatusOK, `"password_changed":true`},
 		{"/accept", `{"token":"abc","password":"senha-forte-1"}`, http.StatusCreated, `"account_created":true`},

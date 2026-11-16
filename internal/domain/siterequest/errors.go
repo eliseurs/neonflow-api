@@ -15,4 +15,9 @@ var (
 	ErrNoteRequired      = errors.New("escreva a mensagem para o cliente")
 	ErrPriceRequired     = errors.New("informe o preço do transfer para confirmar")
 	ErrPriceChanged      = errors.New("o valor do carro mudou desde o pedido; peça ajuste ao cliente")
+	ErrNameRequired      = errors.New("informe o seu nome")
+	ErrSendFailed        = errors.New("não foi possível enviar o e-mail; tente de novo em instantes")
+	ErrInvalidEmail      = errors.New("informe um e-mail válido")
+	// ErrEmailInUse: o e-mail é de um parceiro, da equipe ou de uma conta desativada.
+	ErrEmailInUse = errors.New("este e-mail já é usado por outro acesso; use outro e-mail ou fale com a central pelo WhatsApp")
 )

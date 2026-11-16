@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"neonflow-api/internal/domain/account"
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/fleet"
 	"neonflow-api/internal/domain/siterequest"
@@ -33,6 +35,17 @@ type fakeRepo struct {
 	released   bool
 	completed  [2]string
 	resubmit   siterequest.NewRequest
+	guest      siterequest.Guest
+	guestErr   error
+	tokens     []account.Token
+}
+
+func (f *fakeRepo) Guest(context.Context, string, string) (siterequest.Guest, error) {
+	return f.guest, f.guestErr
+}
+func (f *fakeRepo) SaveToken(_ context.Context, t account.Token) error {
+	f.tokens = append(f.tokens, t)
+	return nil
 }
 
 func (f *fakeRepo) Account(context.Context, string) (siterequest.Account, error) {
@@ -46,7 +59,9 @@ func (f *fakeRepo) PeriodTaken(context.Context, string, booking.Period) (bool, e
 }
 func (f *fakeRepo) Create(_ context.Context, n siterequest.NewRequest) (siterequest.Request, error) {
 	f.created = n
-	return siterequest.Request{ID: "r1", Kind: n.Kind, Status: siterequest.StatusRequested}, nil
+	start, end := n.Period.Start, n.Period.End
+	return siterequest.Request{ID: "r1", Kind: n.Kind, Status: siterequest.StatusRequested, VehicleName: "Jetta",
+		StartAt: &start, EndAt: &end, Quote: n.Quote}, nil
 }
 func (f *fakeRepo) List(_ context.Context, status, customerID string) ([]siterequest.Request, error) {
 	f.moved = append(f.moved, "list:"+status+":"+customerID)
@@ -100,9 +115,10 @@ func (f *fakeTransfers) Create(_ context.Context, req transfer.CreateRequest, _ 
 type fakeMail struct {
 	sent []email.Message
 	err  error
+	off  bool
 }
 
-func (m *fakeMail) Enabled() bool { return true }
+func (m *fakeMail) Enabled() bool { return !m.off }
 func (m *fakeMail) Send(_ context.Context, msg email.Message) error {
 	m.sent = append(m.sent, msg)
 	return m.err
@@ -127,7 +143,7 @@ func newSvc(repo *fakeRepo) (*SiteRequestService, deps) {
 	return s, d
 }
 
-var account = siterequest.Account{UserID: "u1", CustomerID: "c1", Name: "Ana"}
+var clientAccount = siterequest.Account{UserID: "u1", CustomerID: "c1", Name: "Ana"}
 
 func rentalReq() siterequest.CreateRequest {
 	return siterequest.CreateRequest{Kind: "aluguel", WhatsApp: "5554999990001", VehicleID: carID, StartAt: "2026-12-10T10:00", EndAt: "2026-12-12T10:00", ReferralCode: "htl234"}
@@ -136,7 +152,7 @@ func rentalReq() siterequest.CreateRequest {
 func ptr[T any](v T) *T { return &v }
 
 func TestCreate_Rental(t *testing.T) {
-	repo := &fakeRepo{account: account, terms: siterequest.VehicleTerms{Name: "Jetta", DailyRateCents: 20000, MinDays: 1}}
+	repo := &fakeRepo{account: clientAccount, terms: siterequest.VehicleTerms{Name: "Jetta", DailyRateCents: 20000, MinDays: 1}}
 	svc, _ := newSvc(repo)
 	_, err := svc.Create(context.Background(), "u1", rentalReq())
 	require.NoError(t, err)
@@ -153,13 +169,13 @@ func TestCreate_Rental(t *testing.T) {
 	_, err = svc.Create(context.Background(), "u1", rentalReq())
 	assert.ErrorIs(t, err, siterequest.ErrNoAccount)
 
-	svc, _ = newSvc(&fakeRepo{account: account, terms: siterequest.VehicleTerms{DailyRateCents: 1, MinDays: 5}})
+	svc, _ = newSvc(&fakeRepo{account: clientAccount, terms: siterequest.VehicleTerms{DailyRateCents: 1, MinDays: 5}})
 	_, err = svc.Create(context.Background(), "u1", rentalReq())
 	assert.ErrorIs(t, err, booking.ErrBelowMinDays)
 }
 
 func TestCreate_Transfer(t *testing.T) {
-	repo := &fakeRepo{account: account}
+	repo := &fakeRepo{account: clientAccount}
 	svc, _ := newSvc(repo)
 	_, err := svc.Create(context.Background(), "u1", siterequest.CreateRequest{Kind: "transfer", WhatsApp: "5554999990001", Origin: "POA", Destination: "Gramado",
 		PickupAt: "2026-12-10T08:30", Passengers: 2})
@@ -281,7 +297,7 @@ func TestAdjustAndRefuse(t *testing.T) {
 func TestClientRequests(t *testing.T) {
 	adjust := rentalDetail()
 	adjust.Status = siterequest.StatusAdjustment
-	repo := &fakeRepo{account: account, detail: adjust, terms: siterequest.VehicleTerms{DailyRateCents: 20000, MinDays: 1}}
+	repo := &fakeRepo{account: clientAccount, detail: adjust, terms: siterequest.VehicleTerms{DailyRateCents: 20000, MinDays: 1}}
 	svc, _ := newSvc(repo)
 
 	_, err := svc.Mine(context.Background(), "u1")
@@ -316,7 +332,7 @@ func TestClientRequests(t *testing.T) {
 
 	// Só pedido em ajuste volta para a central.
 	requested := rentalDetail()
-	svc, _ = newSvc(&fakeRepo{account: account, detail: requested})
+	svc, _ = newSvc(&fakeRepo{account: clientAccount, detail: requested})
 	_, err = svc.Resubmit(context.Background(), "u1", "r1", rentalReq())
 	assert.ErrorIs(t, err, siterequest.ErrStatusChanged)
 }
@@ -330,4 +346,73 @@ func TestListAndGet(t *testing.T) {
 	d, err := svc.Get(context.Background(), "r1")
 	require.NoError(t, err)
 	assert.Equal(t, "Jetta", d.VehicleName)
+}
+
+func TestQuote(t *testing.T) {
+	repo := &fakeRepo{terms: siterequest.VehicleTerms{DailyRateCents: 20000, MinDays: 1}}
+	svc, _ := newSvc(repo)
+	q, err := svc.Quote(context.Background(), carID, "2026-12-10T10:00", "2026-12-12T10:00")
+	require.NoError(t, err)
+	assert.True(t, q.Available)
+	assert.Equal(t, int64(40000), *q.TotalCents)
+
+	repo.taken = true
+	q, err = svc.Quote(context.Background(), carID, "2026-12-10T10:00", "2026-12-12T10:00")
+	require.NoError(t, err)
+	assert.False(t, q.Available, "período reservado: mostra o valor, mas indisponível")
+
+	_, err = svc.Quote(context.Background(), carID, "x", "y")
+	assert.ErrorIs(t, err, booking.ErrInvalidDate)
+	svc, _ = newSvc(&fakeRepo{terms: siterequest.VehicleTerms{DailyRateCents: 1, MinDays: 5}})
+	_, err = svc.Quote(context.Background(), carID, "2026-12-10T10:00", "2026-12-12T10:00")
+	assert.ErrorIs(t, err, booking.ErrBelowMinDays)
+}
+
+var guestReq = siterequest.GuestRequest{Name: " Bia Teste ", Email: " BIA@neonflow.test ", WhatsApp: "5554999990002",
+	VehicleID: carID, StartAt: "2026-12-10T10:00", EndAt: "2026-12-12T10:00"}
+
+func TestGuest(t *testing.T) {
+	repo := &fakeRepo{terms: siterequest.VehicleTerms{Name: "Jetta", DailyRateCents: 20000, MinDays: 1}, guest: siterequest.Guest{UserID: "u9", Name: "Bia Teste"}}
+	svc, d := newSvc(repo)
+	require.NoError(t, svc.Guest(context.Background(), guestReq))
+	assert.Equal(t, siterequest.StatusAwaitingEmail, repo.created.Status, "a central só vê depois do clique no e-mail")
+	assert.Equal(t, "u9", repo.created.UserID)
+	assert.Empty(t, repo.created.CustomerID, "o cadastro nasce na confirmação")
+	require.Len(t, repo.tokens, 1)
+	assert.Equal(t, account.PurposeConfirmEmail, repo.tokens[0].Purpose)
+	require.Len(t, d.mail.sent, 1)
+	msg := d.mail.sent[0]
+	assert.Equal(t, "bia@neonflow.test", msg.To)
+	assert.Contains(t, msg.Text, "R$ 400,00")
+	assert.Contains(t, msg.Text, "https://app.neonflow.test/conta/confirmar/")
+	i := strings.Index(msg.Text, "/conta/confirmar/") + len("/conta/confirmar/")
+	assert.Equal(t, repo.tokens[0].Hash, account.HashToken(msg.Text[i:i+43]))
+}
+
+func TestGuest_Errors(t *testing.T) {
+	svc, _ := newSvc(&fakeRepo{})
+	svc.mail = &fakeMail{off: true}
+	assert.ErrorIs(t, svc.Guest(context.Background(), guestReq), email.ErrNotConfigured)
+
+	svc, _ = newSvc(&fakeRepo{})
+	bad := guestReq
+	bad.Name = " "
+	assert.ErrorIs(t, svc.Guest(context.Background(), bad), siterequest.ErrNameRequired)
+	bad = guestReq
+	bad.Email = "Bia <bia@neonflow.test>"
+	assert.ErrorIs(t, svc.Guest(context.Background(), bad), siterequest.ErrInvalidEmail)
+	bad = guestReq
+	bad.WhatsApp = "1"
+	assert.ErrorIs(t, svc.Guest(context.Background(), bad), siterequest.ErrInvalidWhatsApp)
+
+	svc, _ = newSvc(&fakeRepo{terms: siterequest.VehicleTerms{DailyRateCents: 1, MinDays: 1}, taken: true})
+	assert.ErrorIs(t, svc.Guest(context.Background(), guestReq), booking.ErrPeriodUnavailable)
+
+	svc, _ = newSvc(&fakeRepo{terms: siterequest.VehicleTerms{DailyRateCents: 1, MinDays: 1}, guestErr: siterequest.ErrEmailInUse})
+	assert.ErrorIs(t, svc.Guest(context.Background(), guestReq), siterequest.ErrEmailInUse)
+
+	svc, d := newSvc(&fakeRepo{terms: siterequest.VehicleTerms{DailyRateCents: 1, MinDays: 1}})
+	d.mail.err = errors.New("resend: 403")
+	assert.ErrorIs(t, svc.Guest(context.Background(), guestReq), siterequest.ErrSendFailed)
+	assert.Equal(t, []string{"site request email failed"}, d.log.msgs)
 }

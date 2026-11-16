@@ -9,21 +9,24 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"neonflow-api/internal/domain/account"
 	"neonflow-api/internal/domain/booking"
 	"neonflow-api/internal/domain/siterequest"
 )
 
 const (
 	invalidTextRepresentation = "22P02"
+	uniqueViolation           = "23505"
 
-	requestColumns = `r.id, r.kind, r.status, r.customer_id, c.name, u.email, r.whatsapp, r.notes, r.referred_by_partner_id,
+	// Antes da confirmação do e-mail não há cadastro de cliente: o nome vem da conta.
+	requestColumns = `r.id, r.kind, r.status, coalesce(r.customer_id::text, ''), coalesce(c.name, u.name), u.email, r.whatsapp, r.notes, r.referred_by_partner_id,
 		r.vehicle_id, coalesce(v.name, ''), r.start_at, r.end_at, r.place, r.km_plan,
 		r.days, r.daily_rate_cents, r.total_cents, r.deposit_cents, r.km_limit_per_day, r.extra_km_cents,
 		r.origin, r.destination, r.pickup_at, r.passengers, r.flight, r.central_note, r.booking_id, r.transfer_id,
 		r.created_at, r.updated_at`
 	requestFrom = `
 		FROM site_requests r
-		JOIN customers c ON c.id = r.customer_id
+		LEFT JOIN customers c ON c.id = r.customer_id
 		JOIN users u ON u.id = r.user_id
 		LEFT JOIN vehicles v ON v.id = r.vehicle_id`
 
@@ -43,9 +46,9 @@ const (
 	queryCreate = `
 		INSERT INTO site_requests (kind, customer_id, user_id, whatsapp, notes, referred_by_partner_id,
 			vehicle_id, start_at, end_at, place, km_plan, days, daily_rate_cents, total_cents, deposit_cents,
-			km_limit_per_day, extra_km_cents, origin, destination, pickup_at, passengers, flight)
-		VALUES ($1, $2, $3, $4, $5, (SELECT id FROM partners WHERE referral_code = NULLIF($6, '') AND active),
-			NULLIF($7, '')::uuid, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+			km_limit_per_day, extra_km_cents, origin, destination, pickup_at, passengers, flight, status)
+		VALUES ($1, NULLIF($2, '')::uuid, $3, $4, $5, (SELECT id FROM partners WHERE referral_code = NULLIF($6, '') AND active),
+			NULLIF($7, '')::uuid, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 		RETURNING id`
 	queryResubmit = `
 		UPDATE site_requests SET status = 'solicitado', whatsapp = $2, notes = $3,
@@ -54,13 +57,19 @@ const (
 			origin = $15, destination = $16, pickup_at = $17, passengers = $18, flight = $19, updated_at = now()
 		WHERE id = $1 AND status = 'ajuste_pedido'`
 	queryList = `SELECT ` + requestColumns + requestFrom + `
-		WHERE ($1 = '' OR r.status = $1) AND ($2 = '' OR r.customer_id::text = $2)
+		WHERE (r.status = $1 OR ($1 = '' AND r.status <> 'aguardando_email')) AND ($2 = '' OR r.customer_id::text = $2)
 		ORDER BY r.created_at DESC
 		LIMIT 500`
 	queryFind   = `SELECT ` + requestColumns + requestFrom + ` WHERE r.id = $1`
 	queryEvents = `
 		SELECT from_status, to_status, note, user_id, created_at FROM site_request_events
 		WHERE request_id = $1 ORDER BY created_at, id`
+	queryFindGuest = `SELECT id, name, role, active FROM users WHERE lower(email) = $1`
+	// Conta sem senha (password_hash vazio não confere com nenhuma senha) e sem confirmar: nasce do pedido.
+	queryCreateGuest = `INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, '', 'cliente') RETURNING id, name`
+	querySaveToken   = `
+		INSERT INTO account_tokens (purpose, token_hash, user_id, expires_at)
+		VALUES ($1, $2, $3, $4)`
 	queryEvent = `
 		INSERT INTO site_request_events (request_id, from_status, to_status, note, user_id)
 		VALUES ($1, NULLIF($2, ''), $3, $4, $5)`
@@ -121,18 +130,57 @@ func (r *SiteRequestRepository) PeriodTaken(ctx context.Context, vehicleID strin
 
 func (r *SiteRequestRepository) Create(ctx context.Context, n siterequest.NewRequest) (siterequest.Request, error) {
 	var id string
+	status := n.Status
+	if status == "" {
+		status = siterequest.StatusRequested
+	}
 	err := r.inTx(ctx, func(tx *sql.Tx) error {
 		args := append([]any{n.Kind, n.CustomerID, n.UserID, n.WhatsApp, n.Notes, n.ReferralCode}, fields(n)...)
-		if err := tx.QueryRowContext(ctx, queryCreate, args...).Scan(&id); err != nil {
+		if err := tx.QueryRowContext(ctx, queryCreate, append(args, status)...).Scan(&id); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, queryEvent, id, "", siterequest.StatusRequested, "", n.UserID)
+		_, err := tx.ExecContext(ctx, queryEvent, id, "", status, "", n.UserID)
 		return err
 	})
 	if err != nil {
 		return siterequest.Request{}, fmt.Errorf("create site request: %w", err)
 	}
 	return r.request(ctx, id)
+}
+
+func (r *SiteRequestRepository) Guest(ctx context.Context, name, email string) (siterequest.Guest, error) {
+	for attempt := 0; attempt < 2; attempt++ {
+		var g siterequest.Guest
+		var role string
+		var active bool
+		err := r.db.QueryRowContext(ctx, queryFindGuest, email).Scan(&g.UserID, &g.Name, &role, &active)
+		if err == nil {
+			if role != "cliente" || !active {
+				return g, siterequest.ErrEmailInUse
+			}
+			return g, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return g, fmt.Errorf("find guest: %w", err)
+		}
+		err = r.db.QueryRowContext(ctx, queryCreateGuest, name, email).Scan(&g.UserID, &g.Name)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+			continue // outro pedido criou a conta ao mesmo tempo: usa a dele
+		}
+		if err != nil {
+			return g, fmt.Errorf("create guest: %w", err)
+		}
+		return g, nil
+	}
+	return siterequest.Guest{}, siterequest.ErrEmailInUse
+}
+
+func (r *SiteRequestRepository) SaveToken(ctx context.Context, t account.Token) error {
+	if _, err := r.db.ExecContext(ctx, querySaveToken, t.Purpose, t.Hash, t.UserID, t.ExpiresAt); err != nil {
+		return fmt.Errorf("save token: %w", err)
+	}
+	return nil
 }
 
 func (r *SiteRequestRepository) Resubmit(ctx context.Context, id string, n siterequest.NewRequest) (siterequest.Request, error) {

@@ -12,8 +12,9 @@ type Repository interface {
 	// FindAccount devolve a conta ativa com o e-mail; ErrUserNotFound se não houver.
 	FindAccount(ctx context.Context, email string) (Account, error)
 	SaveToken(ctx context.Context, t Token) error
-	// ConfirmEmail usa o link, confirma o e-mail e liga a conta ao cadastro do cliente.
-	ConfirmEmail(ctx context.Context, tokenHash string) error
+	// ConfirmEmail usa o link, confirma o e-mail, liga a conta ao cadastro do cliente e envia à central os
+	// pedidos que aguardavam a confirmação.
+	ConfirmEmail(ctx context.Context, tokenHash string) (Confirmed, error)
 	ResetPassword(ctx context.Context, tokenHash, passwordHash string) error
 	PartnerForInvite(ctx context.Context, partnerID string) (PartnerContact, error)
 	// AcceptInvite usa o convite e cria a conta do parceiro com a senha escolhida.
@@ -22,7 +23,7 @@ type Repository interface {
 
 type Service interface {
 	Signup(ctx context.Context, req SignupRequest) error
-	ConfirmEmail(ctx context.Context, req TokenRequest) error
+	ConfirmEmail(ctx context.Context, req TokenRequest) (Confirmation, error)
 	ForgotPassword(ctx context.Context, req EmailRequest) error
 	ResetPassword(ctx context.Context, req PasswordRequest) error
 	InvitePartner(ctx context.Context, partnerID string) (Invite, error)

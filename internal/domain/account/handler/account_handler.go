@@ -43,11 +43,12 @@ func (h *AccountHandler) Confirm(c *gin.Context) {
 	if !bind(c, &req) {
 		return
 	}
-	if err := h.svc.ConfirmEmail(c.Request.Context(), req); err != nil {
+	res, err := h.svc.ConfirmEmail(c.Request.Context(), req)
+	if err != nil {
 		h.fail(c, "confirm email", err)
 		return
 	}
-	api.Respond(c, http.StatusOK, gin.H{"confirmed": true})
+	api.Respond(c, http.StatusOK, res)
 }
 
 // ForgotPassword godoc: POST /api/public/accounts/forgot-password
